@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Генератор матчів</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 900px; margin: auto; }
+        label { font-weight: bold; display: block; margin-top: 15px; }
+        textarea, input { width: 100%; padding: 8px; margin-top: 5px; }
+        button { margin-top: 20px; padding: 10px 20px; font-size: 16px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+        th { background-color: #f7f7f7; }
+        .section-title { margin-top: 40px; font-size: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<h2>Генератор турнірного розкладу</h2>
+
+<label>Гравці (через кому):</label>
+<textarea id="players" rows="3">A, B, C, D, E, F</textarea>
+
+<label>Кількість турів:</label>
+<input id="rounds" type="number" value="12">
+
+<label>Кількість матчів у турі:</label>
+<input id="matchesPerRound" type="number" value="2" min="1">
+
+<button onclick="generate()">Згенерувати</button>
+
+<div id="results"></div>
+
+<script>
+function generate() {
+
+    let players = document.getElementById("players").value
+        .split(",")
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
+
+    let numRounds = parseInt(document.getElementById("rounds").value);
+    let maxParallel = parseInt(document.getElementById("matchesPerRound").value);
+
+    players = players.sort(() => Math.random() - 0.5);
+
+    let gamesPlayed = {};
+    let pairPlayed = {};
+    players.forEach(p => gamesPlayed[p] = 0);
+
+    let schedule = [];
+    let restingList = [];  // список хто відпочивав у кожному турі
+
+    for (let r = 0; r < numRounds; r++) {
+        let roundMatches = [];
+        let used = new Set();
+
+        let sortedPlayers = [...players].sort((a, b) => gamesPlayed[a] - gamesPlayed[b]);
+
+        for (let p1 of sortedPlayers) {
+            if (used.has(p1)) continue;
+
+            let candidates = sortedPlayers.filter(p2 =>
+                p2 !== p1 && !used.has(p2)
+            );
+
+            candidates.sort((p2a, p2b) => {
+                let pa = (pairPlayed[p1 + "-" + p2a] || 0);
+                let pb = (pairPlayed[p1 + "-" + p2b] || 0);
+
+                if (pa !== pb) return pa - pb;
+                return gamesPlayed[p2a] - gamesPlayed[p2b];
+            });
+
+            if (candidates.length > 0) {
+                let p2 = candidates[0];
+                roundMatches.push([p1, p2]);
+                used.add(p1);
+                used.add(p2);
+
+                gamesPlayed[p1]++;
+                gamesPlayed[p2]++;
+                pairPlayed[p1 + "-" + p2] = (pairPlayed[p1 + "-" + p2] || 0) + 1;
+                pairPlayed[p2 + "-" + p1] = (pairPlayed[p2 + "-" + p1] || 0) + 1;
+            }
+
+            if (roundMatches.length >= maxParallel) break;
+        }
+
+        schedule.push(roundMatches);
+
+        // визначаємо хто відпочиває
+        let resting = players.filter(p => !used.has(p));
+        restingList.push(resting);
+    }
+
+    // === ВИВІД У ТАБЛИЦЮ ===
+    let html = `<div class='section-title'>Розклад матчів</div>`;
+    html += `<table><tr><th>Тур</th>`;
+
+    for (let i = 1; i <= maxParallel; i++) {
+        html += `<th>Матч ${i}</th>`;
+    }
+    html += `<th>Відпочивають</th></tr>`;
+
+    schedule.forEach((matches, i) => {
+        html += `<tr><td>${i + 1}</td>`;
+
+        for (let m = 0; m < maxParallel; m++) {
+            if (matches[m]) {
+                html += `<td>${matches[m][0]} vs ${matches[m][1]}</td>`;
+            } else {
+                html += `<td></td>`;
+            }
+        }
+
+        let rest = restingList[i].join(", ");
+        html += `<td>${rest}</td></tr>`;
+    });
+
+    html += `</table>`;
+
+    // Статистика гравців
+    html += `<div class='section-title'>Зіграно ігор кожним</div><table>`;
+    html += `<tr><th>Гравець</th><th>Ігор</th></tr>`;
+    for (let p in gamesPlayed) {
+        html += `<tr><td>${p}</td><td>${gamesPlayed[p]}</td></tr>`;
+    }
+    html += `</table>`;
+
+    document.getElementById("results").innerHTML = html;
+}
+</script>
+
+</body>
+</html>
