@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Генератор матчів</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 10px;
+            max-width: 900px;
+            margin: auto;
+        }
+        label { 
+            font-weight: bold; 
+            display: block; 
+            margin-top: 15px;
+        }
+        textarea, input {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            margin-top: 5px;
+            border-radius: 6px;
+            border: 1px solid #aaa;
+        }
+        button {
+            margin-top: 15px;
+            padding: 14px;
+            width: 100%;
+            font-size: 17px;
+            border-radius: 8px;
+            border: none;
+            background: #0078ff;
+            color: white;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #005fcc;
+        }
+        .download-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .download-buttons button {
+            flex: 1;
+            min-width: 130px;
+            background: #444;
+        }
+        .download-buttons button:hover {
+            background: #222;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: center;
+            font-size: 15px;
+        }
+        th {
+            background-color: #f7f7f7;
+            font-weight: bold;
+        }
+        .section-title {
+            margin-top: 30px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .player-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-right: 12px;
+        }
+
+        #playerSelect {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Генератор турнірного розкладу</h2>
+
+<label>Оберіть гравців:</label>
+<div id="playerSelect">
+    <label class="player-checkbox"><input type="checkbox" value="Антон"> Антон</label>
+    <label class="player-checkbox"><input type="checkbox" value="Іра"> Іра</label>
+    <label class="player-checkbox"><input type="checkbox" value="Юля"> Юля</label>
+    <label class="player-checkbox"><input type="checkbox" value="Олександр"> Олександр</label>
+    <label class="player-checkbox"><input type="checkbox" value="Назар"> Назар</label>
+    <label class="player-checkbox"><input type="checkbox" value="Тарас"> Тарас</label>
+    <label class="player-checkbox"><input type="checkbox" value="Люба"> Люба</label>
+    <label class="player-checkbox"><input type="checkbox" value="Анатолій"> Анатолій</label>
+</div>
+
+<label>Кількість турів:</label>
+<input id="rounds" type="number" value="12">
+
+<label>Кількість матчів у турі:</label>
+<input id="matchesPerRound" type="number" value="2" min="1">
+
+<button onclick="generate()">Згенерувати</button>
+
+<div class="download-buttons" id="downloadArea" style="display:none;">
+    <button onclick="downloadCSV()">Завантажити CSV</button>
+    <button onclick="downloadHTML()">Завантажити HTML</button>
+</div>
+
+<div id="results"></div>
+
+<script>
+let lastGeneratedHTML = "";
+
+function generate() {
+
+    let players = Array.from(document.querySelectorAll("#playerSelect input:checked"))
+        .map(cb => cb.value);
+
+    if (players.length < 2) {
+        alert("Потрібно вибрати щонайменше 2 гравців!");
+        return;
+    }
+
+    let numRounds = parseInt(document.getElementById("rounds").value);
+    let maxParallel = parseInt(document.getElementById("matchesPerRound").value);
+
+    players = players.sort(() => Math.random() - 0.5);
+
+    let gamesPlayed = {};
+    let pairPlayed = {};
+    players.forEach(p => gamesPlayed[p] = 0);
+
+    let schedule = [];
+    let restingList = [];
+
+    for (let r = 0; r < numRounds; r++) {
+        let roundMatches = [];
+        let used = new Set();
+
+        let sortedPlayers = [...players].sort((a, b) => gamesPlayed[a] - gamesPlayed[b]);
+
+        for (let p1 of sortedPlayers) {
+            if (used.has(p1)) continue;
+
+            let candidates = sortedPlayers.filter(p2 =>
+                p2 !== p1 && !used.has(p2)
+            );
+
+            candidates.sort((p2a, p2b) => {
+                let pa = (pairPlayed[p1 + "-" + p2a] || 0);
+                let pb = (pairPlayed[p1 + "-" + p2b] || 0);
+
+                if (pa !== pb) return pa - pb;
+                return gamesPlayed[p2a] - gamesPlayed[p2b];
+            });
+
+            if (candidates.length > 0) {
+                let p2 = candidates[0];
+                roundMatches.push([p1, p2]);
+                used.add(p1);
+                used.add(p2);
+
+                gamesPlayed[p1]++;
+                gamesPlayed[p2]++;
+                pairPlayed[p1 + "-" + p2] = (pairPlayed[p1 + "-" + p2] || 0) + 1;
+                pairPlayed[p2 + "-" + p1] = (pairPlayed[p2 + "-" + p1] || 0) + 1;
+            }
+
+            if (roundMatches.length >= maxParallel) break;
+        }
+
+        schedule.push(roundMatches);
+
+        let resting = players.filter(p => !used.has(p));
+        restingList.push(resting);
+    }
+
+    let html = `<div class='section-title'>Розклад матчів</div>`;
+    html += `<div class="table-wrapper"><table><tr><th>Тур</th>`;
+
+    for (let i = 1; i <= maxParallel; i++) {
+        html += `<th>Матч ${i}</th>`;
+    }
+    html += `<th>Відпочивають</th></tr>`;
+
+    schedule.forEach((matches, i) => {
+        html += `<tr><td>${i + 1}</td>`;
+
+        for (let m = 0; m < maxParallel; m++) {
+            if (matches[m]) {
+                html += `<td>${matches[m][0]} vs ${matches[m][1]}</td>`;
+            } else {
+                html += `<td></td>`;
+            }
+        }
+
+        let rest = restingList[i].join(", ");
+        html += `<td>${rest}</td></tr>`;
+    });
+
+    html += `</table></div>`;
+
+    document.getElementById("results").innerHTML = html;
+    lastGeneratedHTML = html;
+    document.getElementById("downloadArea").style.display = "flex";
+}
+
+function downloadCSV() {
+    let rows = [];
+    let table = document.querySelector("#results table");
+    let trs = table.querySelectorAll("tr");
+
+    trs.forEach(tr => {
+        let row = [];
+        tr.querySelectorAll("th,td").forEach(td => {
+            row.push(td.textContent.trim());
+        });
+        rows.push(row.join(";"));
+    });
+
+    let csvContent = rows.join("\n");
+    let blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
+    let a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "schedule.csv";
+    a.click();
+}
+
+function downloadHTML() {
+    let blob = new Blob([lastGeneratedHTML], { type: "text/html;charset=utf-8;" });
+    let a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "schedule.html";
+    a.click();
+}
+</script>
+
+</body>
+</html>
