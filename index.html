@@ -1,357 +1,422 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="UTF-8" />
-  <title>Генератор матчів (стабільна версія)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: Arial, sans-serif; padding: 10px; max-width: 900px; margin: auto; }
-    h2 { margin: 8px 0 12px; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, maximum-scale=1">
+<title>Match Generator</title>
 
-    label { font-weight: bold; display: block; margin-top: 14px; }
-    input, textarea {
-      width: 100%; padding: 12px; font-size: 16px;
-      border: 1px solid #aaa; border-radius: 6px; box-sizing: border-box;
+<style>
+    body { font-family:-apple-system, BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; margin:0; background:#f5f5f5; }
+    header { background:#222; color:white; padding:16px; text-align:center; }
+    main { padding:16px; max-width:1000px; margin:auto; }
+    h2 { margin-top:28px; font-size:1.3rem; }
+
+    .players-grid {
+        display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+        gap:10px;
     }
+    label { display:flex; align-items:center; gap:10px; font-size:1rem; }
+
+    input[type=checkbox] {
+        width:24px; height:24px; -webkit-appearance:none; appearance:none;
+        border:2px solid #444; border-radius:6px; background:white; position:relative;
+    }
+    input[type=checkbox]:checked { background:#007aff; border-color:#007aff; }
+    input[type=checkbox]:checked::after {
+        content:"✓"; color:white; font-size:18px;
+        position:absolute; top:-2px; left:4px;
+    }
+
+    .controls { display:grid; gap:14px; max-width:340px; }
+    .controls label { justify-content:space-between; }
+
+    input[type=number],input[type=text]{
+        width:140px; padding:8px; border:1px solid #aaa; border-radius:6px; background:white;
+        font-size:1rem;
+    }
+
+    .row { display:flex; flex-wrap:wrap; gap:12px; margin-top:20px; }
+
     button {
-      width: 100%; padding: 12px; margin-top: 10px; font-size: 16px;
-      border: none; border-radius: 8px; font-weight: 600; background: #0078ff; color: #fff;
+        width:100%; padding:14px 16px; font-size:1.05rem; font-weight:600;
+        background:#007aff; color:white; border:none; border-radius:10px; cursor:pointer;
     }
-    button:hover { background: #005fcc; }
-    .secondary-btn { background: #444; }
-    .secondary-btn:hover { background: #222; }
+    button:active { opacity:.75; }
 
-    #playerSelect { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
-    /* iPhone checkbox fix */
-    .player-checkbox { display: flex; align-items: center; gap: 8px; font-size: 17px; }
-    .player-checkbox input[type="checkbox"] {
-      width: 22px; height: 22px; margin: 0; padding: 0;
-      -webkit-appearance: none; appearance: none;
-      border: 2px solid #555; border-radius: 4px; background: #fff; position: relative; cursor: pointer;
+    .export-btn { background:#222 !important; }
+    .share-btn { background:#444 !important; }
+
+    .export-row { display:flex; gap:12px; width:100%; }
+    .export-row button { flex:1; }
+
+    .hidden { display:none !important; }
+
+    table {
+        width:100%; border-collapse:collapse; background:white;
+        margin-top:20px; font-size:.95rem;
     }
-    .player-checkbox input[type="checkbox"]:checked::after {
-      content: "✔"; font-size: 17px; color: #0078ff; position: absolute; top: -2px; left: 3px;
+    th,td {
+        border:1px solid #ccc; padding:8px; text-align:center; word-break:break-word;
     }
 
-    .download-buttons { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
-    .download-buttons button { flex: 1; }
+    .highlight-pair { background:#ffe0e0; font-weight:bold; }
 
-    .section-title { margin-top: 18px; font-size: 20px; font-weight: bold; }
+    @media(max-width:600px){
+        input[type=number],input[type=text]{ width:110px; }
+        .controls{ max-width:100%; }
+        button{ font-size:1rem; }
+        table{ font-size:.82rem; }
+        .export-row{ flex-direction:column; }
+    }
 
-    .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; font-size: 15px; }
-    th { background: #f2f2f2; }
-
-    /* Друк: показуємо тільки таблицю */
     @media print {
-      body * { visibility: hidden; }
-      #results, #results * { visibility: visible; }
-      #results { position: absolute; top: 0; left: 0; width: 100%; }
-      table { font-size: 14px; }
+        body * { visibility:hidden !important; }
+        #tableBox,#tableBox * { visibility:visible !important; }
+        #tableBox{ position:absolute; top:0; left:0; width:100%; }
     }
-  </style>
+</style>
 </head>
 <body>
-  <h2>Генератор турнірного розкладу</h2>
 
-  <!-- Seed -->
-  <label>Seed:</label>
-  <input id="seedInput" type="text" placeholder="Seed генерується автоматично" />
-  <button class="secondary-btn" onclick="shareLink()">Поділитися посиланням із seed</button>
-  <button class="secondary-btn" onclick="generateRandomSeed()">Випадковий seed</button>
+<header><h1>Генератор матчів</h1></header>
+<main>
 
-  <!-- Players -->
-  <label>Оберіть гравців:</label>
-  <div id="playerSelect">
-    <label class="player-checkbox"><input type="checkbox" value="Антон"> Антон</label>
-    <label class="player-checkbox"><input type="checkbox" value="Іра"> Іра</label>
-    <label class="player-checkbox"><input type="checkbox" value="Юля"> Юля</label>
-    <label class="player-checkbox"><input type="checkbox" value="Олександр"> Олександр</label>
-    <label class="player-checkbox"><input type="checkbox" value="Назар"> Назар</label>
-    <label class="player-checkbox"><input type="checkbox" value="Тарас"> Тарас</label>
-    <label class="player-checkbox"><input type="checkbox" value="Люба"> Люба</label>
-    <label class="player-checkbox"><input type="checkbox" value="Анатолій"> Анатолій</label>
-  </div>
+<h2>Гравці</h2>
+<div class="players-grid" id="players"></div>
 
-  <label>Кількість ігор:</label>
-  <input id="rounds" type="number" value="8" min="1" />
+<h2>Параметри</h2>
+<div class="controls">
+    <label>Кількість ігор <input id="games" type="number" min="1" value="8"></label>
+    <label>Кількість кортів <input id="courts" type="number" min="1" value="2"></label>
+    <label>Уникати повторів N ігор <input id="avoidN" type="number" min="1" value="2"></label>
+    <label>Seed <input id="seed" type="text" readonly></label>
+</div>
 
-  <label>Кількість кортів у грі:</label>
-  <input id="matchesPerRound" type="number" value="2" min="1" />
+<div class="row">
+    <button onclick="generate()">Згенерувати</button>
+</div>
 
-  <button onclick="generate()">Згенерувати</button>
+<div class="row hidden" id="afterGenRow">
+    <div class="export-row">
+        <button class="export-btn" onclick="exportCSV()">Експорт CSV</button>
+        <button class="export-btn" onclick="window.print()">Експорт PDF</button>
+    </div>
+    <button class="share-btn" onclick="shareLink()">Поділитися</button>
+</div>
 
-  <div class="download-buttons" id="downloadArea" style="display:none;">
-    <button class="secondary-btn" onclick="downloadCSV()">Завантажити CSV</button>
-    <button class="secondary-btn" onclick="window.print()">Експорт у PDF</button>
-  </div>
+<h2>Результат</h2>
+<div id="tableBox"></div>
 
-  <div id="results"></div>
+<h2>Статистика</h2>
+<div style="background:white;padding:12px;border-radius:8px;">
+    <div id="statsPlayers"></div>
+    <div id="statsPairs" style="margin-top:10px;"></div>
+</div>
 
-  <script>
-    // ===============================
-    // 1) Seedable RNG (детермінований)
-    // ===============================
-    function mulberry32(seed) {
-      return function () {
-        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-        return ((t ^ t >>> 14) >>> 0) / 4294967296;
-      };
+</main>
+
+<script>
+
+/* ============================================================
+   SEEDED RNG
+============================================================ */
+function mulberry32(a){
+    return function(){
+        a |= 0;
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function seededShuffle(arr, r){
+    for(let i = arr.length - 1; i > 0; i--){
+        const j = Math.floor(r() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+}
+
+/* ============================================================
+   DATA
+============================================================ */
+const PLAYER_LIST = [
+    "Антон","Іра","Олександр","Юля",
+    "Назар","Тарас","Люба","Анатолій"
+];
+
+const DEFAULT_SELECTED = new Set(["Антон","Іра","Олександр","Юля","Назар"]);
+
+/* ============================================================
+   INIT PLAYERS
+============================================================ */
+function initPlayers(){
+    const box = document.getElementById("players");
+    PLAYER_LIST.forEach(p=>{
+        const checked = DEFAULT_SELECTED.has(p) ? "checked" : "";
+        box.insertAdjacentHTML("beforeend",
+            `<label><input type="checkbox" id="p_${p}" ${checked}><span>${p}</span></label>`
+        );
+    });
+}
+
+/* ============================================================
+   LOAD FROM URL
+============================================================ */
+function loadFromURL(){
+    const url = new URL(window.location.href);
+    let hasParams = false;
+
+    if(url.searchParams.has("seed")){
+        hasParams = true;
+        document.getElementById("seed").value = url.searchParams.get("seed");
     }
 
-    function seededShuffle(arr, rand) {
-      const a = arr.slice();
-      for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(rand() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
-      }
-      return a;
+    if(url.searchParams.has("players")){
+        hasParams = true;
+        PLAYER_LIST.forEach(p => document.getElementById("p_"+p).checked = false);
+        url.searchParams.get("players").split(",").forEach(p=>{
+            const el = document.getElementById("p_"+p);
+            if(el) el.checked = true;
+        });
     }
 
-    // ===============================
-    // 2) Balanced slots (рівномірний добір унікальних гравців у кожну гру)
-    // ===============================
-    function buildBalancedSlots(players, numGames, courts, seed) {
-      const rand = mulberry32(seed);
-      const n = players.length;
+    if(url.searchParams.has("games")){
+        hasParams = true;
+        document.getElementById("games").value = url.searchParams.get("games");
+    }
 
-      // Реальна кількість кортів, яку можемо задіяти (мін. 2 гравці на корт)
-      const activeCourts = Math.min(courts, Math.floor(n / 2));
-      const playersPerGame = activeCourts * 2;
+    if(url.searchParams.has("courts")){
+        hasParams = true;
+        document.getElementById("courts").value = url.searchParams.get("courts");
+    }
 
-      if (playersPerGame === 0) {
-        return { slots: Array.from({ length: numGames }, () => []), activeCourts: 0 };
-      }
+    if(url.searchParams.has("avoidN")){
+        hasParams = true;
+        document.getElementById("avoidN").value = url.searchParams.get("avoidN");
+    }
 
-      const appearances = Object.fromEntries(players.map(p => [p, 0])); // скільки разів включили в ігри
-      const lastPlayed  = Object.fromEntries(players.map(p => [p, -Infinity])); // індекс останньої гри
+    return hasParams;
+}
 
-      const baseOrder = seededShuffle(players, rand);
-      const slots = Array.from({ length: numGames }, () => []);
+/* ============================================================
+   AUTO SEED
+============================================================ */
+function autoSeed(){
+    document.getElementById("seed").value = Math.floor(Math.random()*1e9).toString();
+}
 
-      for (let g = 0; g < numGames; g++) {
-        const selected = new Set();
+/* ============================================================
+   NEW — BALANCED PLAYER PICKER
+============================================================ */
 
-        for (let k = 0; k < playersPerGame; k++) {
-          const candidates = baseOrder.filter(p => !selected.has(p));
+function scoreCandidateDistribution(cand, playerCount){
+    let s = 0;
+    for(let p of cand) s += playerCount[p] || 0;
+    return s;
+}
 
-          candidates.sort((a, b) => {
-            if (appearances[a] !== appearances[b]) return appearances[a] - appearances[b];
-            if (lastPlayed[a]  !== lastPlayed[b])  return lastPlayed[a]  - lastPlayed[b];
-            return rand() - 0.5;
-          });
+function chooseBalancedPlayers(players, courts, r, pairCount, recentPairs, playerCount){
+    const needed = courts * 2;
+    const attempts = 400;
 
-          const pick = candidates[0];
-          selected.add(pick);
-          appearances[pick] += 1;
-          lastPlayed[pick] = g;
+    let best = null;
+    let bestScore = Infinity;
+
+    for(let i=0; i<attempts; i++){
+        let t = [...players];
+        seededShuffle(t, r);
+
+        let cand = t.slice(0, needed);
+        let score = 0;
+
+        for(let k=0; k<cand.length; k+=2){
+            const A=cand[k], B=cand[k+1];
+            const key = A < B ? A+"-"+B : B+"-"+A;
+
+            if(recentPairs.includes(key)) score += 500;
+            score += (pairCount[key] || 0) * 15;
         }
 
-        slots[g] = Array.from(selected);
-      }
+        score += scoreCandidateDistribution(cand, playerCount) * 3;
 
-      return { slots, activeCourts };
+        if(score < bestScore){
+            bestScore = score;
+            best = cand;
+        }
+    }
+    return best;
+}
+
+/* ============================================================
+   GENERATE
+============================================================ */
+function generate(){
+    const seed = parseInt(document.getElementById("seed").value) || 1;
+    const r = mulberry32(seed);
+
+    const games  = +document.getElementById("games").value;
+    const courts = +document.getElementById("courts").value;
+    const avoidN = +document.getElementById("avoidN").value;
+
+    const players = PLAYER_LIST.filter(p => document.getElementById("p_"+p).checked);
+
+    if(players.length < courts * 2){
+        alert("Замало гравців!");
+        return;
     }
 
-    // ===============================
-    // 3) ПАРИ: мінімізуємо повтори, уникаємо рематчів підряд
-    // ===============================
-    function buildPairs(slots, activeCourts, allPlayers, seed) {
-      const rand = mulberry32(seed + 10000);
-      const schedule = [];
-      const resting  = [];
+    const pairCount = {};
+    const playerCount = {};
+    players.forEach(p => playerCount[p] = 0);
 
-      const pairCount    = {}; // "A-B" → скільки разів грали
-      const pairLastGame = {}; // "A-B" → індекс останньої гри
-      const key = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`);
+    const recentPairs = [];
+    const results = [];
 
-      for (let g = 0; g < slots.length; g++) {
-        const pool  = seededShuffle(slots[g], rand);
+    for(let g=1; g<=games; g++){
+
+        const chosen = chooseBalancedPlayers(
+            players,
+            courts,
+            r,
+            pairCount,
+            recentPairs,
+            playerCount
+        );
+
+        const used = new Set(chosen);
+        const rest = players.filter(p => !used.has(p));
+
         const pairs = [];
 
-        const needPairs = Math.min(activeCourts, Math.floor(pool.length / 2));
+        for(let c=0; c<courts; c++){
+            const A = chosen[2*c];
+            const B = chosen[2*c+1];
 
-        while (pairs.length < needPairs && pool.length >= 2) {
-          const p1 = pool.shift();
+            const key = A < B ? A+"-"+B : B+"-"+A;
 
-          const candidates = pool.slice();
-          candidates.sort((a, b) => {
-            const ka = key(p1, a);
-            const kb = key(p1, b);
+            pairCount[key] = (pairCount[key] || 0) + 1;
+            recentPairs.push(key);
 
-            const ca = pairCount[ka] || 0;
-            const cb = pairCount[kb] || 0;
-            if (ca !== cb) return ca - cb;
+            pairs.push([A,B]);
 
-            const la = pairLastGame[ka] ?? -Infinity;
-            const lb = pairLastGame[kb] ?? -Infinity;
-            if (la !== lb) return la - lb;
-
-            return rand() - 0.5;
-          });
-
-          const p2 = candidates[0];
-          pairs.push([p1, p2]);
-
-          const kpair = key(p1, p2);
-          pairCount[kpair]    = (pairCount[kpair] || 0) + 1;
-          pairLastGame[kpair] = g;
-
-          const idx = pool.indexOf(p2);
-          if (idx >= 0) pool.splice(idx, 1);
+            playerCount[A]++;
+            playerCount[B]++;
         }
 
-        schedule.push(pairs);
+        while(recentPairs.length > avoidN * courts)
+            recentPairs.shift();
 
-        // Відпочивають: усі обрані гравці мінус ті, що зіграли у цій грі
-        const used = new Set(pairs.flat());
-        resting.push(allPlayers.filter(p => !used.has(p)));
-      }
-
-      return { schedule, resting };
+        results.push({ game:g, pairs, rest });
     }
 
-    // ===============================
-    // 4) ГОЛОВНА: зчитує UI → генерує → малює таблицю
-    // ===============================
-    function generate() {
-      const seedStr = document.getElementById("seedInput").value.trim();
-      const seedNum = parseInt(seedStr, 10);
-      if (!Number.isFinite(seedNum)) {
-        alert("Seed має бути числом (наприклад 12345).");
-        return;
-      }
+    window._pairCount = pairCount;
 
-      const players = Array.from(document.querySelectorAll("#playerSelect input:checked"))
-        .map(cb => cb.value);
+    renderTable(results);
+    renderStats(playerCount, pairCount);
 
-      if (players.length < 2) {
-        alert("Оберіть мінімум 2 гравців!");
-        return;
-      }
+    document.getElementById("afterGenRow").classList.remove("hidden");
+}
 
-      const numGamesInput = parseInt(document.getElementById("rounds").value, 10);
-      const courtsInput   = parseInt(document.getElementById("matchesPerRound").value, 10);
+/* ============================================================
+   RENDER TABLE
+============================================================ */
+function renderTable(results){
+    const courts = +document.getElementById("courts").value;
+    const pc = window._pairCount || {};
 
-      const numGames = Math.max(1, numGamesInput);
-      const courts   = Math.max(1, courtsInput);
+    let html = `<table><tr><th>Гра</th>`;
+    for(let c=1; c<=courts; c++) html += `<th>Корт ${c}</th>`;
+    html += `<th>Відпочивають</th></tr>`;
 
-      // 1) Слоти: рівномірно формуємо унікальних гравців на гру
-      const { slots, activeCourts } = buildBalancedSlots(players, numGames, courts, seedNum);
+    results.forEach(r=>{
+        html += `<tr><td>${r.game}</td>`;
 
-      // 2) Пари в кожній грі
-      const { schedule, resting } = buildPairs(slots, activeCourts, players, seedNum);
+        r.pairs.forEach(p=>{
+            const key = p[0] < p[1] ? p[0]+"-"+p[1] : p[1]+"-"+p[0];
+            const cnt = pc[key] || 0;
+            const cls = cnt >= 3 ? "highlight-pair" : "";
+            const mark = cnt >= 2 ? ` (${cnt}×)` : "";
 
-      // 3) Таблиця
-      let html = `<div class='section-title'>Розклад матчів</div>`;
+            html += `<td class="${cls}">${p[0]} – ${p[1]}${mark}</td>`;
+        });
 
-      if (activeCourts < courts) {
-        html += `<p style="margin:8px 0;color:#a00;">
-          Увага: замало гравців для обраної кількості кортів.
-          Використано фактично: <b>${activeCourts}</b> корт(и/ів).
-        </p>`;
-      }
+        html += `<td>${r.rest.join(", ")}</td></tr>`;
+    });
 
-      html += `<div class="table-wrapper"><table><tr><th>Гра</th>`;
-      for (let i = 1; i <= activeCourts; i++) html += `<th>Корт ${i}</th>`;
-      html += `<th>Відпочивають</th></tr>`;
+    html += "</table>";
+    document.getElementById("tableBox").innerHTML = html;
+}
 
-      for (let g = 0; g < numGames; g++) {
-        html += `<tr><td>${g + 1}</td>`;
+/* ============================================================
+   RENDER STATS
+============================================================ */
+function renderStats(playerCount, pairCount){
+    let p = "<h3>Ігри гравців</h3><ul>";
+    for(const pl in playerCount)
+        p+=`<li>${pl}: ${playerCount[pl]}</li>`;
+    p+="</ul>";
 
-        const pairs = schedule[g] || [];
-        for (let c = 0; c < activeCourts; c++) {
-          if (pairs[c]) {
-            const [a, b] = pairs[c];
-            html += `<td>${a} vs ${b}</td>`;
-          } else {
-            html += `<td></td>`;
-          }
-        }
+    let s="<h3>Статистика пар</h3><ul>";
+    for(const k in pairCount)
+        s+=`<li>${k}: ${pairCount[k]}×</li>`;
+    s+="</ul>";
 
-        const used = new Set((pairs || []).flat());
-        const rest = players.filter(p => !used.has(p));
-        html += `<td>${rest.join(", ")}</td>`;
+    document.getElementById("statsPlayers").innerHTML = p;
+    document.getElementById("statsPairs").innerHTML = s;
+}
 
-        html += `</tr>`;
-      }
+/* ============================================================
+   EXPORT CSV
+============================================================ */
+function exportCSV(){
+    const table = document.querySelector("#tableBox table");
+    if(!table) return;
 
-      html += `</table></div>`;
+    let csv="";
+    table.querySelectorAll("tr").forEach(row=>{
+        csv += [...row.children]
+            .map(td=>`"${td.innerText}"`)
+            .join(",") + "\n";
+    });
 
-      document.getElementById("results").innerHTML = html;
-      const dl = document.getElementById("downloadArea");
-      if (dl) dl.style.display = "flex";
-      window.lastGeneratedHTML = html;
-    }
+    const blob=new Blob([csv],{type:"text/csv"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="matches.csv";
+    a.click();
+}
 
-    // ===============================
-    // 5) Допоміжні: CSV, Share, Seed
-    // ===============================
-    function downloadCSV() {
-      const table = document.querySelector("#results table");
-      if (!table) return;
-      const csv = [...table.querySelectorAll("tr")].map(tr =>
-        [...tr.children].map(td => td.textContent).join(";")
-      ).join("\n");
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "schedule.csv";
-      a.click();
-    }
+/* ============================================================
+   SHAREABLE LINK
+============================================================ */
+function shareLink(){
+    const seed=document.getElementById("seed").value;
+    const games=document.getElementById("games").value;
+    const courts=document.getElementById("courts").value;
+    const avoidN=document.getElementById("avoidN").value;
 
-    function generateRandomSeed() {
-      const seed = Math.floor(Math.random() * 1e12);
-      document.getElementById("seedInput").value = seed;
-    }
+    const players=PLAYER_LIST.filter(p=>document.getElementById("p_"+p).checked);
 
-    function shareLink() {
-      const seed = document.getElementById("seedInput").value.trim();
-      const rounds = document.getElementById("rounds").value;
-      const matches = document.getElementById("matchesPerRound").value;
-      const players = Array.from(document.querySelectorAll("#playerSelect input:checked")).map(cb => cb.value);
+    const url=new URL(window.location.href);
+    url.searchParams.set("seed",seed);
+    url.searchParams.set("games",games);
+    url.searchParams.set("courts",courts);
+    url.searchParams.set("avoidN",avoidN);
+    url.searchParams.set("players",players.join(","));
 
-      const params = new URLSearchParams();
-      params.set("seed", seed);
-      params.set("rounds", rounds);
-      params.set("matches", matches);
-      params.set("players", players.join(","));
+    navigator.clipboard.writeText(url.toString());
+    alert("Посилання скопійовано!");
+}
 
-      const url = window.location.origin + window.location.pathname + "?" + params.toString();
-      navigator.clipboard.writeText(url).then(() => {
-        alert("Посилання скопійовано:\n" + url);
-      });
-    }
+/* ============================================================
+   INIT
+============================================================ */
+initPlayers();
+autoSeed();
+if(loadFromURL()) generate();
 
-    // ===============================
-    // 6) Завантаження з URL + авто‑seed
-    // ===============================
-    (function loadFromURL() {
-      const params = new URLSearchParams(window.location.search);
+</script>
 
-      if (params.has("seed")) {
-        document.getElementById("seedInput").value = params.get("seed");
-      } else {
-        generateRandomSeed(); // автогенерація seed
-      }
-
-      if (params.has("rounds")) document.getElementById("rounds").value = params.get("rounds");
-      if (params.has("matches")) document.getElementById("matchesPerRound").value = params.get("matches");
-
-      if (params.has("players")) {
-        const list = params.get("players").split(",");
-        for (const name of list) {
-          const cb = document.querySelector(`#playerSelect input[value="${name}"]`);
-          if (cb) cb.checked = true;
-        }
-      }
-
-      // Якщо seed у URL — автоматично згенеруємо розклад
-      if (params.has("seed")) generate();
-    })();
-  </script>
 </body>
 </html>
