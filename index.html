@@ -319,7 +319,7 @@ function generate(){
 }
 
 /* ============================================================
-   RENDER TABLE
+   RENDER TABLE — без показу (3×)
 ============================================================ */
 function renderTable(results){
     const courts = +document.getElementById("courts").value;
@@ -335,10 +335,10 @@ function renderTable(results){
         r.pairs.forEach(p=>{
             const key = p[0] < p[1] ? p[0]+"-"+p[1] : p[1]+"-"+p[0];
             const cnt = pc[key] || 0;
-            const cls = cnt >= 3 ? "highlight-pair" : "";
-            const mark = cnt >= 2 ? ` (${cnt}×)` : "";
+            const cls = "";
 
-            html += `<td class="${cls}">${p[0]} – ${p[1]}${mark}</td>`;
+            /* 🔥 Прибрано текст повторів повністю */
+            html += `<td class="${cls}">${p[0]} – ${p[1]}</td>`;
         });
 
         html += `<td>${r.rest.join(", ")}</td></tr>`;
