@@ -89,6 +89,8 @@
     <label>Кількість ігор <input id="games" type="number" min="1" value="8"></label>
     <label>Кількість кортів <input id="courts" type="number" min="1" value="2"></label>
     <label>Уникати повторів N ігор <input id="avoidN" type="number" min="1" value="2"></label>
+    <label>Початок ігрової сесії <input id="startTime" type="time" value="18:40"></label>
+
     <label>Seed <input id="seed" type="text" readonly></label>
 </div>
 
@@ -318,27 +320,32 @@ function generate(){
     document.getElementById("afterGenRow").classList.remove("hidden");
 }
 
-/* ============================================================
-   RENDER TABLE — без показу (3×)
-============================================================ */
 function renderTable(results){
     const courts = +document.getElementById("courts").value;
     const pc = window._pairCount || {};
 
-    let html = `<table><tr><th>Гра</th>`;
+    /* Read starting time */
+    const start = document.getElementById("startTime").value; // "18:40"
+    let [sh, sm] = start.split(":").map(Number);
+    let currentMinutes = sh * 60 + sm;
+
+    const GAME_DURATION = 10; // 10 minutes per slot
+
+    let html = `<table><tr><th>Час</th>`;
     for(let c=1; c<=courts; c++) html += `<th>Корт ${c}</th>`;
     html += `<th>Відпочивають</th></tr>`;
 
     results.forEach(r=>{
-        html += `<tr><td>${r.game}</td>`;
+        const from = currentMinutes;
+        const to   = currentMinutes + GAME_DURATION;
+
+        const timeLabel = `${formatTime(from)}–${formatTime(to)}`;
+        currentMinutes = to;
+
+        html += `<tr><td>${timeLabel}</td>`;
 
         r.pairs.forEach(p=>{
-            const key = p[0] < p[1] ? p[0]+"-"+p[1] : p[1]+"-"+p[0];
-            const cnt = pc[key] || 0;
-            const cls = "";
-
-            /* 🔥 Прибрано текст повторів повністю */
-            html += `<td class="${cls}">${p[0]} – ${p[1]}</td>`;
+            html += `<td>${p[0]} – ${p[1]}</td>`;
         });
 
         html += `<td>${r.rest.join(", ")}</td></tr>`;
@@ -347,6 +354,18 @@ function renderTable(results){
     html += "</table>";
     document.getElementById("tableBox").innerHTML = html;
 }
+
+
+/* ============================================================
+   Converts minutes → HH:MM
+============================================================ */
+function formatTime(totalMinutes){
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+
+
 
 /* ============================================================
    RENDER STATS
