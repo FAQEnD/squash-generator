@@ -403,29 +403,103 @@ function exportCSV(){
 /* ============================================================
    SHAREABLE LINK
 ============================================================ */
-function shareLink(){
-    const seed=document.getElementById("seed").value;
-    const games=document.getElementById("games").value;
-    const courts=document.getElementById("courts").value;
 
-    const players=PLAYER_LIST.filter(p=>document.getElementById("p_"+p).checked);
+function b64encodeUnicode(str) {
+    return btoa(
+        encodeURIComponent(str)
+            .replace(/%([0-9A-F]{2})/g, (_, p1) =>
+                String.fromCharCode("0x" + p1)
+            )
+    )
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+}
 
-    const url=new URL(window.location.href);
-    url.searchParams.set("seed",seed);
-    url.searchParams.set("games",games);
-    url.searchParams.set("courts",courts);
-    url.searchParams.set("players",players.join(","));
+function b64decodeUnicode(b64) {
+    const s = b64.replace(/-/g, "+").replace(/_/g, "/");
+    return decodeURIComponent(
+        Array.from(atob(s))
+            .map(c => "%" + c.charCodeAt(0).toString(16).padStart(2,"0"))
+            .join("")
+    );
+}
 
-    navigator.clipboard.writeText(url.toString());
+/* ============================================================
+   ✅ SHARE LINK — compress all settings in Base64
+============================================================ */
+function shareLink() {
+    const seed   = document.getElementById("seed").value;
+    const games  = document.getElementById("games").value;
+    const courts = document.getElementById("courts").value;
+    const start  = document.getElementById("startTime").value;
+
+    const players = PLAYER_LIST.filter(
+        p => document.getElementById("p_" + p).checked
+    );
+
+    /* повний точний стан */
+    const state = {
+        s: seed,
+        g: games,
+        c: courts,
+        t: start,
+        p: players
+    };
+
+    const json = JSON.stringify(state);
+    const b64  = b64encodeUnicode(json);
+
+    const url = `${location.origin}${location.pathname}#${b64}`;
+    navigator.clipboard.writeText(url);
+
     alert("Посилання скопійовано!");
 }
 
 /* ============================================================
-   INIT
+   ✅ LOAD STATE FROM HASH
+============================================================ */
+function loadFromHash() {
+    if (!location.hash) return false;
+
+    let json;
+    try {
+        json = b64decodeUnicode(location.hash.substring(1));
+    } catch {
+        return false;
+    }
+
+    let state;
+    try {
+        state = JSON.parse(json);
+    } catch {
+        return false;
+    }
+
+    if (state.s) document.getElementById("seed").value = state.s;
+    if (state.g) document.getElementById("games").value = state.g;
+    if (state.c) document.getElementById("courts").value = state.c;
+    if (state.t) document.getElementById("startTime").value = state.t;
+
+    if (state.p) {
+        PLAYER_LIST.forEach(p =>
+            document.getElementById("p_"+p).checked = false
+        );
+        state.p.forEach(p => {
+            const el = document.getElementById("p_"+p);
+            if (el) el.checked = true;
+        });
+    }
+
+    return true;
+}
+
+/* ============================================================
+   ✅ INIT
 ============================================================ */
 initPlayers();
 autoSeed();
-if(loadFromURL()) generate();
+if (loadFromHash()) generate();
 
 </script>
 
