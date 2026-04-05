@@ -88,7 +88,6 @@
 <div class="controls">
     <label>Кількість ігор <input id="games" type="number" min="1" value="8"></label>
     <label>Кількість кортів <input id="courts" type="number" min="1" value="2"></label>
-    <label>Уникати повторів N ігор <input id="avoidN" type="number" min="1" value="2"></label>
     <label>Початок ігрової сесії <input id="startTime" type="time" value="18:40"></label>
 
     <label>Seed <input id="seed" type="text" readonly></label>
@@ -193,11 +192,6 @@ function loadFromURL(){
         document.getElementById("courts").value = url.searchParams.get("courts");
     }
 
-    if(url.searchParams.has("avoidN")){
-        hasParams = true;
-        document.getElementById("avoidN").value = url.searchParams.get("avoidN");
-    }
-
     return hasParams;
 }
 
@@ -259,7 +253,7 @@ function generate(){
 
     const games  = +document.getElementById("games").value;
     const courts = +document.getElementById("courts").value;
-    const avoidN = +document.getElementById("avoidN").value;
+    const avoidN = 2;
 
     const players = PLAYER_LIST.filter(p => document.getElementById("p_"+p).checked);
 
@@ -413,7 +407,6 @@ function shareLink(){
     const seed=document.getElementById("seed").value;
     const games=document.getElementById("games").value;
     const courts=document.getElementById("courts").value;
-    const avoidN=document.getElementById("avoidN").value;
 
     const players=PLAYER_LIST.filter(p=>document.getElementById("p_"+p).checked);
 
@@ -421,7 +414,6 @@ function shareLink(){
     url.searchParams.set("seed",seed);
     url.searchParams.set("games",games);
     url.searchParams.set("courts",courts);
-    url.searchParams.set("avoidN",avoidN);
     url.searchParams.set("players",players.join(","));
 
     navigator.clipboard.writeText(url.toString());
