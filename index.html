@@ -81,10 +81,10 @@
 <header><h1>Генератор матчів</h1></header>
 <main>
 
-<h2>Гравці</h2>
+<h2 id="playersTitle">Гравці</h2>
 <div class="players-grid" id="players"></div>
 
-<h2>Параметри</h2>
+<h2 id="settingsTitle">Параметри</h2>
 <div class="controls">
     <label>Кількість ігор <input id="games" type="number" min="1" value="8"></label>
     <label>Кількість кортів <input id="courts" type="number" min="1" value="2"></label>
@@ -127,11 +127,11 @@
     <button class="share-btn" onclick="shareLink()">Поділитися</button>
 </div>
 
-<h2>Результат</h2>
+<h2 id="resultsTitle">Результат</h2>
 <div id="tableBox"></div>
 
-<h2>Статистика</h2>
-<div style="background:white;padding:12px;border-radius:8px;">
+<h2 id="statsTitle">Статистика</h2>
+<div id="statsBox" class="stats-box" style="background:white;padding:12px;border-radius:8px;">
     <div id="statsPlayers"></div>
     <div id="statsPairs" style="margin-top:10px;"></div>
 </div>
@@ -482,12 +482,52 @@ function loadFromHash() {
     return true;
 }
 
+
+/* ============================================================
+   ✅ READ‑ONLY VIEW FOR SHARED LINKS (HASH MODE)
+   If page is opened WITH hash → show ONLY the table
+============================================================ */
+
+function applyReadonlyMode(isShared) {
+    if (!isShared) return;
+
+    const hideIds = [
+        "playersTitle",
+        "players",
+        "settingsTitle",
+        "statsTitle",
+        "statsBox"
+    ];
+
+    hideIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = "none";
+    });
+
+    // сховати всі кнопки та control-панелі
+    document.querySelectorAll(".controls, .row")
+        .forEach(el => el.style.display = "none");
+
+    // залишаємо header
+    document.querySelector("header").style.display = "block";
+
+    // таблиця — головна
+    const tableBox = document.getElementById("tableBox");
+    tableBox.style.display = "block";
+    tableBox.style.marginTop = "12px";
+}
+
 /* ============================================================
    ✅ INIT
 ============================================================ */
 initPlayers();
 autoSeed();
-if (loadFromHash()) generate();
+
+if (loadFromHash())
+{
+  generate();
+  applyReadonlyMode(true);
+}
 
 </script>
 
