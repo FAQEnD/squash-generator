@@ -90,7 +90,29 @@
     <label>Кількість кортів <input id="courts" type="number" min="1" value="2"></label>
     <label>Початок ігрової сесії <input id="startTime" type="time" value="18:40"></label>
 
-    <label>Seed <input id="seed" type="text" readonly></label>
+    
+    <label style="display:flex;align-items:center;gap:8px;">
+        Seed
+        <input id="seed" type="text" readonly style="flex:1;">
+        <button
+            type="button"
+            onclick="autoSeed()"
+            title="Оновити seed"
+            style="
+                width:32px;
+                height:32px;
+                padding:0;
+                border-radius:50%;
+                background:transparent;
+                border:1px solid #aaa;
+                color:#333;
+                font-size:16px;
+                line-height:1;
+                cursor:pointer;
+            "
+        >🔄</button>
+    </label>
+
 </div>
 
 <div class="row">
@@ -159,40 +181,6 @@ function initPlayers(){
             `<label><input type="checkbox" id="p_${p}" ${checked}><span>${p}</span></label>`
         );
     });
-}
-
-/* ============================================================
-   LOAD FROM URL
-============================================================ */
-function loadFromURL(){
-    const url = new URL(window.location.href);
-    let hasParams = false;
-
-    if(url.searchParams.has("seed")){
-        hasParams = true;
-        document.getElementById("seed").value = url.searchParams.get("seed");
-    }
-
-    if(url.searchParams.has("players")){
-        hasParams = true;
-        PLAYER_LIST.forEach(p => document.getElementById("p_"+p).checked = false);
-        url.searchParams.get("players").split(",").forEach(p=>{
-            const el = document.getElementById("p_"+p);
-            if(el) el.checked = true;
-        });
-    }
-
-    if(url.searchParams.has("games")){
-        hasParams = true;
-        document.getElementById("games").value = url.searchParams.get("games");
-    }
-
-    if(url.searchParams.has("courts")){
-        hasParams = true;
-        document.getElementById("courts").value = url.searchParams.get("courts");
-    }
-
-    return hasParams;
 }
 
 /* ============================================================
