@@ -74,6 +74,11 @@
         #tableBox,#tableBox * { visibility:visible !important; }
         #tableBox{ position:absolute; top:0; left:0; width:100%; }
     }
+
+    .current-game {
+        background: #2CC0BE;
+    }
+
 </style>
 </head>
 <body>
@@ -300,6 +305,7 @@ function generate(){
     renderStats(playerCount, pairCount);
 
     document.getElementById("afterGenRow").classList.remove("hidden");
+    startGameTimeHighlighter();
 }
 
 function renderTable(results){
@@ -515,6 +521,46 @@ function applyReadonlyMode(isShared) {
     const tableBox = document.getElementById("tableBox");
     tableBox.style.display = "block";
     tableBox.style.marginTop = "12px";
+}
+
+
+function highlightCurrentGameRow() {
+    const table = document.querySelector("#tableBox table");
+    if (!table) return;
+
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const rows = table.querySelectorAll("tr");
+
+    rows.forEach((row, index) => {
+        if (index === 0) return; // skip header
+
+        const timeCell = row.children[0];
+        if (!timeCell) return;
+
+        const match = timeCell.innerText.match(/(\d{2}):(\d{2})–(\d{2}):(\d{2})/);
+        if (!match) return;
+
+        const start =
+            parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+        const end =
+            parseInt(match[3], 10) * 60 + parseInt(match[4], 10);
+
+        if (nowMinutes >= start && nowMinutes < end) {
+            row.classList.add("current-game");
+        } else {
+            row.classList.remove("current-game");
+        }
+    });
+}
+
+/* ============================================================
+   ✅ AUTO-UPDATE EVERY 30 SECONDS
+============================================================ */
+function startGameTimeHighlighter() {
+    highlightCurrentGameRow();
+    setInterval(highlightCurrentGameRow, 30_000);
 }
 
 /* ============================================================
