@@ -54,38 +54,109 @@ function autoSeed(){
    NEW — BALANCED PLAYER PICKER
 ============================================================ */
 
-function scoreCandidateDistribution(cand, playerCount){
-    let s = 0;
-    for(let p of cand) s += playerCount[p] || 0;
-    return s;
+function scoreCandidateBalance(cand, players, playerCount){
+    const selected = new Set(cand);
+    const counts = players.map(p => (playerCount[p] || 0) + (selected.has(p) ? 1 : 0));
+    const min = Math.min(...counts);
+    const max = Math.max(...counts);
+    const totalSquares = counts.reduce((sum, count) => sum + count * count, 0);
+
+    return (max - min) * 1000 + totalSquares;
 }
 
-function chooseBalancedPlayers(players, courts, r, pairCount, recentPairs, playerCount){
+function pairKey(A, B){
+    return A < B ? A+"-"+B : B+"-"+A;
+}
+
+function resolveDisplayedPair(A, B, playerSide){
+    const sideA = playerSide[A];
+    const sideB = playerSide[B];
+
+    if(sideA && sideB){
+        if(sideA !== sideB){
+            return sideA === "left" ? [A, B] : [B, A];
+        }
+        return [A, B];
+    }
+
+    if(sideA){
+        return sideA === "left" ? [A, B] : [B, A];
+    }
+
+    if(sideB){
+        return sideB === "left" ? [B, A] : [A, B];
+    }
+
+    return [A, B];
+}
+
+function hasSideConflict(A, B, playerSide){
+    return playerSide[A] && playerSide[A] === playerSide[B];
+}
+
+function commitDisplayedPair(A, B, playerSide){
+    const pair = resolveDisplayedPair(A, B, playerSide);
+    const left = pair[0];
+    const right = pair[1];
+
+    if(!playerSide[left]) playerSide[left] = "left";
+    if(!playerSide[right]) playerSide[right] = "right";
+
+    return pair;
+}
+
+function scoreCandidateSideConflicts(cand, playerSide){
+    const simulatedSide = { ...playerSide };
+    let conflicts = 0;
+
+    for(let k=0; k<cand.length; k+=2){
+        const A = cand[k];
+        const B = cand[k+1];
+
+        if(hasSideConflict(A, B, simulatedSide)){
+            conflicts++;
+        }
+
+        commitDisplayedPair(A, B, simulatedSide);
+    }
+
+    return conflicts;
+}
+
+function chooseBalancedPlayers(players, courts, r, pairCount, recentPairs, playerCount, playerSide){
     const needed = courts * 2;
     const attempts = 400;
 
     let best = null;
-    let bestScore = Infinity;
+    let bestBalance = Infinity;
+    let bestConflicts = Infinity;
+    let bestPairScore = Infinity;
 
     for(let i=0; i<attempts; i++){
         let t = [...players];
         seededShuffle(t, r);
 
         let cand = t.slice(0, needed);
-        let score = 0;
+        let pairScore = 0;
+        const balance = scoreCandidateBalance(cand, players, playerCount);
+        const conflicts = scoreCandidateSideConflicts(cand, playerSide);
 
         for(let k=0; k<cand.length; k+=2){
             const A=cand[k], B=cand[k+1];
-            const key = A < B ? A+"-"+B : B+"-"+A;
+            const key = pairKey(A, B);
 
-            if(recentPairs.includes(key)) score += 500;
-            score += (pairCount[key] || 0) * 15;
+            if(recentPairs.includes(key)) pairScore += 500;
+            pairScore += (pairCount[key] || 0) * 15;
         }
 
-        score += scoreCandidateDistribution(cand, playerCount) * 3;
-
-        if(score < bestScore){
-            bestScore = score;
+        if(
+            balance < bestBalance ||
+            (balance === bestBalance && conflicts < bestConflicts) ||
+            (balance === bestBalance && conflicts === bestConflicts && pairScore < bestPairScore)
+        ){
+            bestBalance = balance;
+            bestConflicts = conflicts;
+            bestPairScore = pairScore;
             best = cand;
         }
     }
@@ -112,6 +183,7 @@ function generate(){
 
     const pairCount = {};
     const playerCount = {};
+    const playerSide = {};
     players.forEach(p => playerCount[p] = 0);
 
     const recentPairs = [];
@@ -125,7 +197,8 @@ function generate(){
             r,
             pairCount,
             recentPairs,
-            playerCount
+            playerCount,
+            playerSide
         );
 
         const used = new Set(chosen);
@@ -137,12 +210,12 @@ function generate(){
             const A = chosen[2*c];
             const B = chosen[2*c+1];
 
-            const key = A < B ? A+"-"+B : B+"-"+A;
+            const key = pairKey(A, B);
 
             pairCount[key] = (pairCount[key] || 0) + 1;
             recentPairs.push(key);
 
-            pairs.push([A,B]);
+            pairs.push(commitDisplayedPair(A, B, playerSide));
 
             playerCount[A]++;
             playerCount[B]++;
