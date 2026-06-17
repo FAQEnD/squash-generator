@@ -68,6 +68,46 @@ function scoreProjectedPlayerBalance(cand, players, playerCount){
 
 const COURT_PIN_PRIORITY_BASE = 3;
 
+function pairKey(A, B){
+    return A < B ? A+"-"+B : B+"-"+A;
+}
+
+function resolveDisplayedPair(A, B, playerSide){
+    const sideA = playerSide[A];
+    const sideB = playerSide[B];
+
+    if(sideA && sideB){
+        if(sideA !== sideB){
+            return sideA === "left" ? [A, B] : [B, A];
+        }
+        return [A, B];
+    }
+
+    if(sideA){
+        return sideA === "left" ? [A, B] : [B, A];
+    }
+
+    if(sideB){
+        return sideB === "left" ? [B, A] : [A, B];
+    }
+
+    return [A, B];
+}
+
+function hasSideConflict(A, B, playerSide){
+    return playerSide[A] && playerSide[A] === playerSide[B];
+}
+
+function commitDisplayedPair(A, B, playerSide){
+    const pair = resolveDisplayedPair(A, B, playerSide);
+    const left = pair[0];
+    const right = pair[1];
+
+    if(!playerSide[left]) playerSide[left] = "left";
+    if(!playerSide[right]) playerSide[right] = "right";
+
+    return pair;
+}
 function chooseBalancedPlayers(players, courts, r, pairCount, recentPairs, playerCount){
     const needed = courts * 2;
     const attempts = 400;
@@ -160,7 +200,7 @@ function arrangePairsByCourt(pairs, courtPins, courtPinOrder, courts){
 function scorePairRepeat(pair, pairCount, recentPairs){
     const A = pair[0];
     const B = pair[1];
-    const key = A < B ? A+"-"+B : B+"-"+A;
+    const key = pairKey(A, B);
     let score = 0;
 
     if(recentPairs.includes(key)) score += 500;
@@ -169,9 +209,18 @@ function scorePairRepeat(pair, pairCount, recentPairs){
     return score;
 }
 
-function arrangePlayersIntoPairs(chosen, pairCount, recentPairs, courtPins, courtPinOrder, courts){
+function scorePairSideConflict(pair, playerSide){
+    return hasSideConflict(pair[0], pair[1], playerSide) ? 1 : 0;
+}
+
+function commitCourtPairs(pairs, playerSide){
+    return pairs.map(pair => commitDisplayedPair(pair[0], pair[1], playerSide));
+}
+
+function arrangePlayersIntoPairs(chosen, pairCount, recentPairs, courtPins, courtPinOrder, courts, playerSide){
     const best = {
         pairScore: Infinity,
+        sideConflicts: Infinity,
         courtScore: -Infinity,
         pairs: []
     };
@@ -183,15 +232,25 @@ function arrangePlayersIntoPairs(chosen, pairCount, recentPairs, courtPins, cour
                 (sum, pair) => sum + scorePairRepeat(pair, pairCount, recentPairs),
                 0
             );
+            const sideConflicts = pairs.reduce(
+                (sum, pair) => sum + scorePairSideConflict(pair, playerSide),
+                0
+            );
 
             if(
                 pairScore < best.pairScore ||
                 (
                     pairScore === best.pairScore &&
+                    sideConflicts < best.sideConflicts
+                ) ||
+                (
+                    pairScore === best.pairScore &&
+                    sideConflicts === best.sideConflicts &&
                     arrangement.score > best.courtScore
                 )
             ){
                 best.pairScore = pairScore;
+                best.sideConflicts = sideConflicts;
                 best.courtScore = arrangement.score;
                 best.pairs = arrangement.pairs;
             }
@@ -244,6 +303,7 @@ function generateSchedule(options){
     const courtPins = {};
     const courtPinOrder = {};
     const nextCourtPinOrder = { value: 1 };
+    const playerSide = {};
     players.forEach(p => playerCount[p] = 0);
 
     const recentPairs = [];
@@ -269,13 +329,16 @@ function generateSchedule(options){
             recentPairs,
             courtPins,
             courtPinOrder,
-            courts
+            courts,
+            playerSide
         );
+
+        pairs = commitCourtPairs(pairs, playerSide);
 
         pairs.forEach(pair=>{
             const A = pair[0];
             const B = pair[1];
-            const key = A < B ? A+"-"+B : B+"-"+A;
+            const key = pairKey(A, B);
 
             pairCount[key] = (pairCount[key] || 0) + 1;
             recentPairs.push(key);
