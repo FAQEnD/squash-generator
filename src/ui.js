@@ -14,22 +14,52 @@
     root.SquashUi = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (config, time) {
     let highlighterTimer = null;
+    let lastGamesValue = null;
 
     function initPlayers() {
         const box = document.getElementById("players");
+        const gamesValue = document.getElementById("games").value;
+
+        lastGamesValue = gamesValue;
 
         config.PLAYER_LIST.forEach(player => {
+            const card = document.createElement("div");
             const label = document.createElement("label");
             const checkbox = document.createElement("input");
             const name = document.createElement("span");
+            const availability = document.createElement("span");
+            const fromText = document.createElement("span");
+            const fromInput = document.createElement("input");
+            const toText = document.createElement("span");
+            const toInput = document.createElement("input");
 
+            card.className = "player-card";
+            label.className = "player-select";
             checkbox.type = "checkbox";
             checkbox.id = "p_" + player;
             checkbox.checked = config.DEFAULT_SELECTED.has(player);
             name.textContent = player;
+            name.className = "player-name";
+            availability.className = "availability-range";
+            fromText.textContent = "Грає з";
+            fromInput.type = "number";
+            fromInput.min = "1";
+            fromInput.value = "1";
+            fromInput.id = "from_" + player;
+            fromInput.title = "З гри";
+            fromInput.setAttribute("aria-label", player + ": грає з гри");
+            toText.textContent = "по";
+            toInput.type = "number";
+            toInput.min = "1";
+            toInput.value = gamesValue;
+            toInput.id = "to_" + player;
+            toInput.title = "По гру";
+            toInput.setAttribute("aria-label", player + ": грає по гру");
 
+            availability.append(fromText, fromInput, toText, toInput);
             label.append(checkbox, name);
-            box.append(label);
+            card.append(label, availability);
+            box.append(card);
         });
     }
 
@@ -37,16 +67,46 @@
         document.getElementById("seed").value = Math.floor(Math.random() * 1e9).toString();
     }
 
+    function syncAvailabilityPlaceholders() {
+        const games = document.getElementById("games").value;
+
+        config.PLAYER_LIST.forEach(player => {
+            const toInput = document.getElementById("to_" + player);
+            if (toInput.value === "" || toInput.value === lastGamesValue) {
+                toInput.value = games;
+            }
+        });
+
+        lastGamesValue = games;
+    }
+
     function getSelectedPlayers() {
         return config.PLAYER_LIST.filter(player => document.getElementById("p_" + player).checked);
     }
 
+    function readPlayerAvailability(players, games) {
+        const playerAvailability = {};
+
+        players.forEach(player => {
+            playerAvailability[player] = {
+                from: document.getElementById("from_" + player).value || "1",
+                to: document.getElementById("to_" + player).value || String(games)
+            };
+        });
+
+        return playerAvailability;
+    }
+
     function readScheduleOptions() {
+        const games = +document.getElementById("games").value;
+        const players = getSelectedPlayers();
+
         return {
             seed: document.getElementById("seed").value,
-            games: +document.getElementById("games").value,
+            games,
             courts: +document.getElementById("courts").value,
-            players: getSelectedPlayers()
+            players,
+            playerAvailability: readPlayerAvailability(players, games)
         };
     }
 
@@ -58,7 +118,8 @@
             g: String(options.games),
             c: String(options.courts),
             t: document.getElementById("startTime").value,
-            p: options.players
+            p: options.players,
+            a: options.playerAvailability
         };
     }
 
@@ -67,6 +128,7 @@
         if (state.g) document.getElementById("games").value = state.g;
         if (state.c) document.getElementById("courts").value = state.c;
         if (state.t) document.getElementById("startTime").value = state.t;
+        if (state.g) syncAvailabilityPlaceholders();
 
         if (state.p) {
             config.PLAYER_LIST.forEach(player => {
@@ -75,6 +137,15 @@
             state.p.forEach(player => {
                 const el = document.getElementById("p_" + player);
                 if (el) el.checked = true;
+            });
+        }
+
+        if (state.a) {
+            Object.keys(state.a).forEach(player => {
+                const fromInput = document.getElementById("from_" + player);
+                const toInput = document.getElementById("to_" + player);
+                if (fromInput && state.a[player].from) fromInput.value = state.a[player].from;
+                if (toInput && state.a[player].to) toInput.value = state.a[player].to;
             });
         }
     }
@@ -105,13 +176,20 @@
 
             appendCell(row, "td", timeLabel);
             result.pairs.forEach(pair => {
-                appendCell(row, "td", `${pair[0]} ${config.TIME_RANGE_SEPARATOR} ${pair[1]}`);
+                appendCell(row, "td", formatCourtSlot(pair));
             });
             appendCell(row, "td", result.rest.join(", "));
             table.append(row);
         });
 
         document.getElementById("tableBox").replaceChildren(table);
+    }
+
+    function formatCourtSlot(pair) {
+        if (pair.length === 0) return "—";
+        if (pair.length === 1) return pair[0];
+
+        return `${pair[0]} ${config.TIME_RANGE_SEPARATOR} ${pair[1]}`;
     }
 
     function appendListItem(list, label, value) {
@@ -225,6 +303,7 @@
     return {
         initPlayers,
         autoSeed,
+        syncAvailabilityPlaceholders,
         readScheduleOptions,
         readShareState,
         applyShareState,
