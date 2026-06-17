@@ -1,5 +1,8 @@
 {
-  "scripts": {
-    "test": "node tests/generator.test.js"
-  }
+    "scripts": {
+        "test": "node tests/generator.test.js",
+        "format": "npx prettier . --write",
+        "format:check": "npx prettier . --check",
+        "check": "npm run format:check && npm test"
+    }
 }
