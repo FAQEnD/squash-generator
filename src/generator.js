@@ -29,6 +29,8 @@
     }
 
     function scoreProjectedPlayerBalance(cand, players, playerCount) {
+        if (players.length === 0) return 0;
+
         const chosen = new Set(cand);
         const projectedCounts = players.map(
             player => (playerCount[player] || 0) + (chosen.has(player) ? 1 : 0)
@@ -83,6 +85,7 @@
 
     function chooseBalancedPlayers(players, courts, r, playerCount) {
         const needed = courts * 2;
+        const pickCount = Math.min(needed, players.length);
         let best = null;
         let bestBalanceScore = Infinity;
 
@@ -90,7 +93,7 @@
             const shuffledPlayers = [...players];
             seededShuffle(shuffledPlayers, r);
 
-            const cand = shuffledPlayers.slice(0, needed);
+            const cand = shuffledPlayers.slice(0, pickCount);
             const balanceScore = scoreProjectedPlayerBalance(cand, players, playerCount);
 
             if (balanceScore < bestBalanceScore) {
@@ -100,6 +103,35 @@
         }
 
         return best;
+    }
+
+    function readBoundedGameNumber(value, fallback, games) {
+        const number = parseInt(value, 10);
+        if (!Number.isFinite(number)) return fallback;
+
+        return Math.min(Math.max(number, 1), games);
+    }
+
+    function normalizePlayerAvailability(players, rawAvailability, games) {
+        const availability = {};
+
+        players.forEach(player => {
+            const range = (rawAvailability && rawAvailability[player]) || {};
+
+            availability[player] = {
+                from: readBoundedGameNumber(range.from, 1, games),
+                to: readBoundedGameNumber(range.to, games, games)
+            };
+        });
+
+        return availability;
+    }
+
+    function isPlayerAvailable(player, game, playerAvailability) {
+        const range = playerAvailability[player];
+        if (!range) return true;
+
+        return game >= range.from && game <= range.to;
     }
 
     function getCourtPinPriority(player, courtPinOrder) {
@@ -127,13 +159,25 @@
         return score;
     }
 
-    function getBestCourtArrangement(pairs, courtPins, courtPinOrder, courts) {
+    function getBestCourtArrangement(pairs, courtPins, courtPinOrder, courts, preferredSoloCourt) {
         const best = {
             score: -Infinity,
             pairs
         };
 
         function assign(remaining, court, placed, score) {
+            if (remaining.length === 0) {
+                const completed = placed.concat(
+                    Array.from({ length: courts - placed.length }, () => [])
+                );
+
+                if (score > best.score) {
+                    best.score = score;
+                    best.pairs = completed;
+                }
+                return;
+            }
+
             if (court > courts) {
                 if (score > best.score) {
                     best.score = score;
@@ -145,14 +189,19 @@
             for (let i = 0; i < remaining.length; i++) {
                 const pair = remaining[i];
                 const nextRemaining = remaining.slice(0, i).concat(remaining.slice(i + 1));
-                const variants = [pair, [pair[1], pair[0]]];
+                const variants = pair.length === 2 ? [pair, [pair[1], pair[0]]] : [pair];
 
                 variants.forEach(variant => {
+                    const soloCourtScore =
+                        variant.length === 1 && preferredSoloCourt === court ? 1000000 : 0;
+
                     assign(
                         nextRemaining,
                         court + 1,
                         placed.concat([variant]),
-                        score + scorePairOnCourt(variant, court, courtPins, courtPinOrder)
+                        score +
+                            soloCourtScore +
+                            scorePairOnCourt(variant, court, courtPins, courtPinOrder)
                     );
                 });
             }
@@ -163,6 +212,8 @@
     }
 
     function scorePairRepeat(pair, pairCount, recentPairs) {
+        if (pair.length < 2) return 0;
+
         const A = pair[0];
         const B = pair[1];
         const key = pairKey(A, B);
@@ -175,11 +226,15 @@
     }
 
     function scorePairSideConflict(pair, playerSide) {
+        if (pair.length < 2) return 0;
+
         return hasSideConflict(pair[0], pair[1], playerSide) ? 1 : 0;
     }
 
     function commitCourtPairs(pairs, playerSide) {
-        return pairs.map(pair => commitDisplayedPair(pair[0], pair[1], playerSide));
+        return pairs.map(pair =>
+            pair.length === 2 ? commitDisplayedPair(pair[0], pair[1], playerSide) : pair
+        );
     }
 
     function arrangePlayersIntoPairs(
@@ -243,6 +298,80 @@
         return best.pairs;
     }
 
+    function arrangePlayersIntoCourtSlots(
+        chosen,
+        pairCount,
+        recentPairs,
+        courtPins,
+        courtPinOrder,
+        courts,
+        playerSide,
+        soloCount,
+        preferredSoloCourt
+    ) {
+        if (chosen.length <= 1) {
+            return getBestCourtArrangement(
+                chosen.map(player => [player]),
+                courtPins,
+                courtPinOrder,
+                courts,
+                preferredSoloCourt
+            ).pairs;
+        }
+
+        if (chosen.length % 2 === 0) {
+            return arrangePlayersIntoPairs(
+                chosen,
+                pairCount,
+                recentPairs,
+                courtPins,
+                courtPinOrder,
+                courts,
+                playerSide
+            );
+        }
+
+        let best = {
+            score: Infinity,
+            pairs: []
+        };
+
+        chosen.forEach(singlePlayer => {
+            const pairPlayers = chosen.filter(player => player !== singlePlayer);
+            const pairs = arrangePlayersIntoPairs(
+                pairPlayers,
+                pairCount,
+                recentPairs,
+                courtPins,
+                courtPinOrder,
+                courts,
+                playerSide
+            ).filter(pair => pair.length > 0);
+            const arranged = getBestCourtArrangement(
+                pairs.concat([[singlePlayer]]),
+                courtPins,
+                courtPinOrder,
+                courts,
+                preferredSoloCourt
+            ).pairs;
+            const score =
+                (soloCount[singlePlayer] || 0) * 1000 +
+                arranged.reduce(
+                    (sum, pair) => sum + scorePairRepeat(pair, pairCount, recentPairs),
+                    0
+                );
+
+            if (score < best.score) {
+                best = {
+                    score,
+                    pairs: arranged
+                };
+            }
+        });
+
+        return best.pairs;
+    }
+
     function assignNewCourtPins(pairs, courtPins, courtPinOrder, nextCourtPinOrder) {
         pairs.forEach((pair, index) => {
             const court = index + 1;
@@ -264,8 +393,13 @@
         const courts = +options.courts;
         const players = [...options.players];
         const avoidN = options.avoidN || config.DEFAULT_AVOID_RECENT_ROUNDS;
+        const playerAvailability = normalizePlayerAvailability(
+            players,
+            options.playerAvailability,
+            games
+        );
 
-        if (players.length < courts * 2) {
+        if (players.length === 0) {
             throw new Error("Замало гравців!");
         }
 
@@ -275,39 +409,62 @@
         const courtPinOrder = {};
         const nextCourtPinOrder = { value: 1 };
         const playerSide = {};
+        const soloCourt = { value: null };
+        const soloCount = {};
         players.forEach(p => (playerCount[p] = 0));
+        players.forEach(p => (soloCount[p] = 0));
 
         const recentPairs = [];
         const results = [];
 
         for (let g = 1; g <= games; g++) {
-            const chosen = chooseBalancedPlayers(players, courts, r, playerCount);
+            const availablePlayers = players.filter(player =>
+                isPlayerAvailable(player, g, playerAvailability)
+            );
+            const chosen = chooseBalancedPlayers(availablePlayers, courts, r, playerCount);
 
             const used = new Set(chosen);
-            const rest = players.filter(p => !used.has(p));
+            const rest = availablePlayers.filter(p => !used.has(p));
 
-            let pairs = arrangePlayersIntoPairs(
+            let pairs = arrangePlayersIntoCourtSlots(
                 chosen,
                 pairCount,
                 recentPairs,
                 courtPins,
                 courtPinOrder,
                 courts,
-                playerSide
+                playerSide,
+                soloCount,
+                soloCourt.value
             );
 
             pairs = commitCourtPairs(pairs, playerSide);
 
+            if (!soloCourt.value) {
+                const soloIndex = pairs.findIndex(pair => pair.length === 1);
+                if (soloIndex !== -1) {
+                    soloCourt.value = soloIndex + 1;
+                }
+            }
+
             pairs.forEach(pair => {
+                pair.forEach(player => {
+                    playerCount[player]++;
+                });
+
+                if (pair.length === 1) {
+                    soloCount[pair[0]]++;
+                    return;
+                }
+
+                if (pair.length < 2) return;
+
                 const A = pair[0];
                 const B = pair[1];
                 const key = pairKey(A, B);
 
                 pairCount[key] = (pairCount[key] || 0) + 1;
                 recentPairs.push(key);
-
-                playerCount[A]++;
-                playerCount[B]++;
             });
 
             assignNewCourtPins(pairs, courtPins, courtPinOrder, nextCourtPinOrder);

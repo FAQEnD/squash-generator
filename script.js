@@ -9,7 +9,7 @@ function generate() {
     try {
         schedule = generator.generateSchedule(options);
     } catch (e) {
-        alert("Замало гравців!");
+        alert(e.message);
         return;
     }
 
@@ -47,6 +47,7 @@ function loadFromHash() {
 }
 
 function bindEvents() {
+    document.getElementById("games").addEventListener("input", ui.syncAvailabilityPlaceholders);
     document.getElementById("refreshSeed").addEventListener("click", ui.autoSeed);
     document.getElementById("generateBtn").addEventListener("click", generate);
     document.getElementById("exportCsvBtn").addEventListener("click", ui.exportCSV);
