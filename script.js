@@ -226,22 +226,17 @@ function assignNewCourtPins(pairs, courtPins, courtPinOrder, nextCourtPinOrder){
     });
 }
 
-/* ============================================================
-   GENERATE
-============================================================ */
-function generate(){
-    const seed = parseInt(document.getElementById("seed").value) || 1;
+function generateSchedule(options){
+    const seed = parseInt(options.seed, 10) || 1;
     const r = mulberry32(seed);
 
-    const games  = +document.getElementById("games").value;
-    const courts = +document.getElementById("courts").value;
-    const avoidN = 2;
-
-    const players = PLAYER_LIST.filter(p => document.getElementById("p_"+p).checked);
+    const games = +options.games;
+    const courts = +options.courts;
+    const players = [...options.players];
+    const avoidN = options.avoidN || 2;
 
     if(players.length < courts * 2){
-        alert("Замало гравців!");
-        return;
+        throw new Error("Замало гравців!");
     }
 
     const pairCount = {};
@@ -297,10 +292,42 @@ function generate(){
         results.push({ game:g, pairs, rest });
     }
 
-    window._pairCount = pairCount;
+    return {
+        results,
+        pairCount,
+        playerCount,
+        courtPins,
+        courtPinOrder
+    };
+}
 
-    renderTable(results);
-    renderStats(playerCount, pairCount, courtPins, courtPinOrder);
+/* ============================================================
+   GENERATE
+============================================================ */
+function generate(){
+    const seed = document.getElementById("seed").value;
+    const games  = +document.getElementById("games").value;
+    const courts = +document.getElementById("courts").value;
+
+    const players = PLAYER_LIST.filter(p => document.getElementById("p_"+p).checked);
+
+    let schedule;
+    try{
+        schedule = generateSchedule({
+            players,
+            games,
+            courts,
+            seed
+        });
+    }catch(e){
+        alert("Замало гравців!");
+        return;
+    }
+
+    window._pairCount = schedule.pairCount;
+
+    renderTable(schedule.results);
+    renderStats(schedule.playerCount, schedule.pairCount, schedule.courtPins, schedule.courtPinOrder);
 
     document.getElementById("afterGenRow").classList.remove("hidden");
     startGameTimeHighlighter();
@@ -583,6 +610,15 @@ function bindEvents() {
 /* ============================================================
    ✅ INIT
 ============================================================ */
+if(typeof module !== "undefined"){
+    module.exports = {
+        PLAYER_LIST,
+        generateSchedule,
+        scorePairOnCourt
+    };
+}
+
+if(typeof document !== "undefined"){
 initPlayers();
 bindEvents();
 autoSeed();
@@ -591,4 +627,5 @@ if (loadFromHash())
 {
   generate();
   applyReadonlyMode(true);
+}
 }
