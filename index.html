@@ -1,70 +1,65 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="uk">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, maximum-scale=1">
-<title>Match Generator</title>
-<link rel="stylesheet" href="styles.css">
-</head>
-<body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, maximum-scale=1" />
+        <title>Match Generator</title>
+        <link rel="stylesheet" href="styles.css" />
+    </head>
+    <body>
+        <header><h1>Генератор матчів</h1></header>
+        <main>
+            <h2 id="playersTitle">Гравці</h2>
+            <div class="players-grid" id="players"></div>
 
-<header><h1>Генератор матчів</h1></header>
-<main>
+            <h2 id="settingsTitle">Параметри</h2>
+            <div class="controls">
+                <label>Кількість ігор <input id="games" type="number" min="1" value="8" /></label>
+                <label>Кількість кортів <input id="courts" type="number" min="1" value="2" /></label>
+                <label>Початок ігрової сесії <input id="startTime" type="time" value="18:40" /></label>
 
-<h2 id="playersTitle">Гравці</h2>
-<div class="players-grid" id="players"></div>
+                <label class="seed-label">
+                    Seed
+                    <input id="seed" type="text" />
+                    <button id="refreshSeed" type="button" title="Оновити seed">↻</button>
+                </label>
+            </div>
 
-<h2 id="settingsTitle">Параметри</h2>
-<div class="controls">
-    <label>Кількість ігор <input id="games" type="number" min="1" value="8"></label>
-    <label>Кількість кортів <input id="courts" type="number" min="1" value="2"></label>
-    <label>Початок ігрової сесії <input id="startTime" type="time" value="18:40"></label>
+            <div class="row">
+                <button id="generateBtn">Згенерувати</button>
+            </div>
 
-    
-    <label class="seed-label">
-        Seed
-        <input id="seed" type="text">
-        <button
-            id="refreshSeed"
-            type="button"
-            title="Оновити seed"
-        >🔄</button>
-    </label>
+            <div class="row hidden" id="afterGenRow">
+                <div class="export-row">
+                    <button class="export-btn" id="exportCsvBtn">Експорт CSV</button>
+                    <button class="export-btn" id="exportPdfBtn">Експорт PDF</button>
+                </div>
+                <button class="share-btn" id="shareBtn">Поділитися</button>
+            </div>
 
-</div>
+            <h2 id="resultsTitle">Результат</h2>
+            <div id="tableBox"></div>
 
-<div class="row">
-    <button id="generateBtn">Згенерувати</button>
-</div>
+            <section id="playerScheduleBox" class="player-schedule readonly-hidden" aria-live="polite">
+                <div class="player-schedule-controls">
+                    <label for="playerScheduleSelect">Гравець</label>
+                    <select id="playerScheduleSelect"></select>
+                    <button id="showPlayerScheduleBtn" type="button">Показати мій розклад</button>
+                </div>
+                <div id="playerScheduleResult" class="player-schedule-result"></div>
+            </section>
 
-<div class="row hidden" id="afterGenRow">
-    <div class="export-row">
-        <button class="export-btn" id="exportCsvBtn">Експорт CSV</button>
-        <button class="export-btn" id="exportPdfBtn">Експорт PDF</button>
-    </div>
-    <button class="share-btn" id="shareBtn">Поділитися</button>
-</div>
-
-<h2 id="resultsTitle">Результат</h2>
-<div id="tableBox"></div>
-
-<section id="playerScheduleBox" class="player-schedule readonly-hidden" aria-live="polite">
-    <div class="player-schedule-controls">
-        <label for="playerScheduleSelect">Гравець</label>
-        <select id="playerScheduleSelect"></select>
-        <button id="showPlayerScheduleBtn" type="button">Показати мій розклад</button>
-    </div>
-    <div id="playerScheduleResult" class="player-schedule-result"></div>
-</section>
-
-<h2 id="statsTitle">Статистика</h2>
-<div id="statsBox" class="stats-box">
-    <div id="statsPlayers"></div>
-    <div id="statsPairs" class="stats-pairs"></div>
-</div>
-
-</main>
-<script src="script.js"></script>
-
-</body>
+            <h2 id="statsTitle">Статистика</h2>
+            <div id="statsBox" class="stats-box">
+                <div id="statsPlayers"></div>
+                <div id="statsPairs" class="stats-pairs"></div>
+            </div>
+        </main>
+        <script src="src/config.js"></script>
+        <script src="src/generator.js"></script>
+        <script src="src/time.js"></script>
+        <script src="src/share-state.js"></script>
+        <script src="src/ui.js"></script>
+        <script src="script.js"></script>
+    </body>
 </html>
