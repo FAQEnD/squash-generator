@@ -290,6 +290,7 @@
         });
 
         result.replaceChildren(title, list);
+        highlightCurrentGameRow();
     }
 
     function appendListItem(list, label, value) {
@@ -376,18 +377,9 @@
         }
     }
 
-    function highlightCurrentGameRow() {
-        const table = document.querySelector("#tableBox table");
-        if (!table) return;
-
-        const now = new Date();
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        const rows = table.querySelectorAll("tr");
-
-        rows.forEach((row, index) => {
-            if (index === 0) return;
-
-            const timeCell = row.children[0];
+    function highlightCurrentPlayerScheduleRows(nowMinutes) {
+        document.querySelectorAll(".player-schedule-list li").forEach(row => {
+            const timeCell = row.querySelector(".schedule-time");
             if (!timeCell) return;
 
             const range = time.parseTimeRange(timeCell.innerText);
@@ -395,6 +387,30 @@
 
             row.classList.toggle("current-game", time.isMinuteInRange(nowMinutes, range));
         });
+    }
+
+    function highlightCurrentGameRow() {
+        const table = document.querySelector("#tableBox table");
+        const now = new Date();
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+        if (table) {
+            const rows = table.querySelectorAll("tr");
+
+            rows.forEach((row, index) => {
+                if (index === 0) return;
+
+                const timeCell = row.children[0];
+                if (!timeCell) return;
+
+                const range = time.parseTimeRange(timeCell.innerText);
+                if (!range) return;
+
+                row.classList.toggle("current-game", time.isMinuteInRange(nowMinutes, range));
+            });
+        }
+
+        highlightCurrentPlayerScheduleRows(nowMinutes);
     }
 
     function startGameTimeHighlighter() {

@@ -313,6 +313,10 @@ td {
     background: #f3f3f3;
 }
 
+.player-schedule-list li.current-game {
+    background: #2cc0be;
+}
+
 .schedule-opponent,
 .empty-schedule {
     color: #444;
