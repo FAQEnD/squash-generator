@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const { PLAYER_LIST, generateSchedule } = require("../src/generator.js");
 const { formatTime, formatTimeRange, parseTimeRange, isMinuteInRange } = require("../src/time.js");
 const { createShareUrl, decodeState } = require("../src/share-state.js");
+const ui = require("../src/ui.js");
 
 const NINE_PLAYERS = PLAYER_LIST.slice(0, 9);
 
@@ -140,6 +141,229 @@ function test(name, fn) {
     } catch (error) {
         console.error(`not ok - ${name}`);
         throw error;
+    }
+}
+
+class FakeClassList {
+    constructor(element) {
+        this.element = element;
+        this.classes = new Set();
+    }
+
+    add(value) {
+        this.classes.add(value);
+        this.sync();
+    }
+
+    remove(value) {
+        this.classes.delete(value);
+        this.sync();
+    }
+
+    contains(value) {
+        return this.classes.has(value);
+    }
+
+    toggle(value, force) {
+        const shouldAdd = force === undefined ? !this.classes.has(value) : force;
+        if (shouldAdd) {
+            this.classes.add(value);
+        } else {
+            this.classes.delete(value);
+        }
+        this.sync();
+        return shouldAdd;
+    }
+
+    setFromString(value) {
+        this.classes = new Set(String(value).split(/\s+/).filter(Boolean));
+    }
+
+    sync() {
+        this.element._className = [...this.classes].join(" ");
+    }
+}
+
+class FakeElement {
+    constructor(tagName, ownerDocument) {
+        this.tagName = tagName.toUpperCase();
+        this.ownerDocument = ownerDocument;
+        this.children = [];
+        this.parentNode = null;
+        this.attributes = {};
+        this.classList = new FakeClassList(this);
+        this._className = "";
+        this._textContent = "";
+        this.value = "";
+    }
+
+    set id(value) {
+        this.attributes.id = value;
+        this.ownerDocument.registerElement(value, this);
+    }
+
+    get id() {
+        return this.attributes.id || "";
+    }
+
+    set className(value) {
+        this._className = value;
+        this.classList.setFromString(value);
+    }
+
+    get className() {
+        return this._className;
+    }
+
+    set textContent(value) {
+        this._textContent = String(value);
+        this.children = [];
+    }
+
+    get textContent() {
+        return this.children.length
+            ? this.children.map(child => child.textContent).join("")
+            : this._textContent;
+    }
+
+    get innerText() {
+        return this.textContent;
+    }
+
+    append(...nodes) {
+        nodes.forEach(node => {
+            node.parentNode = this;
+            this.children.push(node);
+        });
+    }
+
+    replaceChildren(...nodes) {
+        this.children = [];
+        this.append(...nodes);
+    }
+
+    querySelector(selector) {
+        return this.querySelectorAll(selector)[0] || null;
+    }
+
+    querySelectorAll(selector) {
+        return queryFrom(this, selector);
+    }
+}
+
+class FakeDocument {
+    constructor() {
+        this.elementsById = {};
+        this.body = this.createElement("body");
+    }
+
+    createElement(tagName) {
+        return new FakeElement(tagName, this);
+    }
+
+    createDocumentFragment() {
+        return this.createElement("fragment");
+    }
+
+    registerElement(id, element) {
+        this.elementsById[id] = element;
+    }
+
+    getElementById(id) {
+        return this.elementsById[id] || null;
+    }
+
+    querySelector(selector) {
+        return this.body.querySelector(selector);
+    }
+
+    querySelectorAll(selector) {
+        return this.body.querySelectorAll(selector);
+    }
+}
+
+function queryFrom(root, selector) {
+    if (selector === "#tableBox table") {
+        const tableBox = root.ownerDocument.getElementById("tableBox");
+        return tableBox ? descendants(tableBox).filter(el => el.tagName === "TABLE") : [];
+    }
+
+    if (selector === ".player-schedule-list li") {
+        return descendants(root).filter(
+            el => el.tagName === "LI" && hasAncestorWithClass(el, "player-schedule-list")
+        );
+    }
+
+    if (selector === ".schedule-time") {
+        return descendants(root).filter(el => el.classList.contains("schedule-time"));
+    }
+
+    if (selector === "#tableBox tr.current-game") {
+        const tableBox = root.ownerDocument.getElementById("tableBox");
+        return tableBox
+            ? descendants(tableBox).filter(
+                  el => el.tagName === "TR" && el.classList.contains("current-game")
+              )
+            : [];
+    }
+
+    if (/^[a-z]+$/i.test(selector)) {
+        return descendants(root).filter(el => el.tagName === selector.toUpperCase());
+    }
+
+    return [];
+}
+
+function descendants(root) {
+    return root.children.flatMap(child => [child].concat(descendants(child)));
+}
+
+function hasAncestorWithClass(element, className) {
+    let current = element.parentNode;
+    while (current) {
+        if (current.classList.contains(className)) return true;
+        current = current.parentNode;
+    }
+    return false;
+}
+
+function appendRoot(document, id, value = "") {
+    const element = document.createElement("div");
+    element.id = id;
+    element.value = value;
+    document.body.append(element);
+    return element;
+}
+
+function withFakeDate(isoDate, fn) {
+    const RealDate = global.Date;
+    global.Date = class extends RealDate {
+        constructor(...args) {
+            if (args.length === 0) return new RealDate(isoDate);
+            return new RealDate(...args);
+        }
+
+        static now() {
+            return new RealDate(isoDate).getTime();
+        }
+    };
+
+    try {
+        fn();
+    } finally {
+        global.Date = RealDate;
+    }
+}
+
+function withFakeDocument(fn) {
+    const realDocument = global.document;
+    const document = new FakeDocument();
+    global.document = document;
+
+    try {
+        fn(document);
+    } finally {
+        global.document = realDocument;
     }
 }
 
@@ -361,4 +585,53 @@ test("encodes and decodes share state", () => {
     const hash = new URL(url).hash;
 
     assert.deepEqual(decodeState(hash), state);
+});
+
+test("renders player schedule with rest rows and highlights the current slot", () => {
+    withFakeDocument(document => {
+        appendRoot(document, "startTime", "18:40");
+        appendRoot(document, "tableBox");
+        appendRoot(document, "playerScheduleResult");
+
+        ui.renderTable(
+            [
+                {
+                    game: 1,
+                    pairs: [
+                        ["Anton", "Olek"],
+                        ["Yulia", "Ira"]
+                    ],
+                    rest: ["Nazar"]
+                },
+                {
+                    game: 2,
+                    pairs: [
+                        ["Anton", "Nazar"],
+                        ["Olek", "Yulia"]
+                    ],
+                    rest: ["Ira"]
+                }
+            ],
+            2
+        );
+
+        withFakeDate("2026-06-30T18:45:00", () => {
+            ui.renderPlayerSchedule("Nazar");
+        });
+
+        const personalRows = document.querySelectorAll(".player-schedule-list li");
+        const currentPersonalRows = personalRows.filter(row =>
+            row.classList.contains("current-game")
+        );
+        const currentGeneralRows = document.querySelectorAll("#tableBox tr.current-game");
+
+        assert.equal(personalRows.length, 2);
+        assert.equal(currentPersonalRows.length, 1);
+        assert.equal(currentGeneralRows.length, 1);
+        assert.equal(personalRows[0].innerText.includes("Відпочинок"), true);
+        assert.equal(personalRows[0].innerText.includes("Корт"), false);
+        assert.equal(personalRows[0].classList.contains("current-game"), true);
+        assert.equal(personalRows[1].innerText.includes("Корт 1"), true);
+        assert.equal(personalRows[1].innerText.includes("з Anton"), true);
+    });
 });

@@ -53,6 +53,10 @@ function bindEvents() {
     document.getElementById("exportCsvBtn").addEventListener("click", ui.exportCSV);
     document.getElementById("exportPdfBtn").addEventListener("click", () => window.print());
     document.getElementById("shareBtn").addEventListener("click", shareLink);
+    document.getElementById("showPlayerScheduleBtn").addEventListener("click", () => {
+        const select = document.getElementById("playerScheduleSelect");
+        ui.renderPlayerSchedule(select.value);
+    });
 }
 
 ui.initPlayers();

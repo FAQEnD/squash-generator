@@ -15,6 +15,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (config, time) {
     let highlighterTimer = null;
     let lastGamesValue = null;
+    let latestScheduleSlots = [];
 
     function initPlayers() {
         const box = document.getElementById("players");
@@ -160,6 +161,7 @@
         const table = document.createElement("table");
         const header = document.createElement("tr");
         let currentMinutes = time.parseTimeToMinutes(document.getElementById("startTime").value);
+        latestScheduleSlots = [];
 
         appendCell(header, "th", "Час");
         for (let court = 1; court <= courts; court++) {
@@ -171,15 +173,21 @@
         results.forEach(result => {
             const row = document.createElement("tr");
             const timeLabel = time.formatTimeRange(currentMinutes, config.GAME_DURATION_MINUTES);
+            const slot = { time: timeLabel, courts: [], rest: result.rest };
 
             currentMinutes += config.GAME_DURATION_MINUTES;
 
             appendCell(row, "td", timeLabel);
-            result.pairs.forEach(pair => {
+            result.pairs.forEach((pair, index) => {
+                slot.courts.push({
+                    court: index + 1,
+                    players: pair
+                });
                 appendCell(row, "td", formatCourtSlot(pair));
             });
             appendCell(row, "td", result.rest.join(", "));
             table.append(row);
+            latestScheduleSlots.push(slot);
         });
 
         document.getElementById("tableBox").replaceChildren(table);
@@ -190,6 +198,99 @@
         if (pair.length === 1) return pair[0];
 
         return `${pair[0]} ${config.TIME_RANGE_SEPARATOR} ${pair[1]}`;
+    }
+
+    function populatePlayerScheduleSelect() {
+        const select = document.getElementById("playerScheduleSelect");
+        if (!select) return;
+
+        select.replaceChildren(
+            ...getSelectedPlayers().map(player => {
+                const option = document.createElement("option");
+                option.value = player;
+                option.textContent = player;
+                return option;
+            })
+        );
+    }
+
+    function appendScheduleText(parent, className, text) {
+        const span = document.createElement("span");
+        span.className = className;
+        span.textContent = text;
+        parent.append(span);
+    }
+
+    function findPlayerSchedule(player) {
+        const matches = [];
+
+        latestScheduleSlots.forEach(slot => {
+            let playerMatch = null;
+
+            slot.courts.forEach(courtInfo => {
+                if (courtInfo.players.includes(player)) {
+                    playerMatch = {
+                        time: slot.time,
+                        court: courtInfo.court,
+                        opponent: courtInfo.players.find(p => p !== player),
+                        isRest: false
+                    };
+                }
+            });
+
+            if (playerMatch) {
+                matches.push(playerMatch);
+                return;
+            }
+
+            if (slot.rest.includes(player)) {
+                matches.push({
+                    time: slot.time,
+                    isRest: true
+                });
+            }
+        });
+
+        return matches;
+    }
+
+    function renderPlayerSchedule(player) {
+        const result = document.getElementById("playerScheduleResult");
+        if (!result || !player) return;
+
+        const matches = findPlayerSchedule(player);
+
+        if (matches.length === 0) {
+            const message = document.createElement("p");
+            message.className = "empty-schedule";
+            message.textContent = `${player} не має ігор у цьому розкладі.`;
+            result.replaceChildren(message);
+            return;
+        }
+
+        const title = document.createElement("h3");
+        const list = document.createElement("ul");
+        title.textContent = player;
+        list.className = "player-schedule-list";
+
+        matches.forEach(match => {
+            const item = document.createElement("li");
+            appendScheduleText(item, "schedule-time", match.time);
+
+            if (match.isRest) {
+                item.className = "schedule-rest-row";
+                appendScheduleText(item, "schedule-rest", "Відпочинок");
+                appendScheduleText(item, "schedule-opponent", "");
+            } else {
+                appendScheduleText(item, "schedule-court", `Корт ${match.court}`);
+                appendScheduleText(item, "schedule-opponent", `з ${match.opponent}`);
+            }
+
+            list.append(item);
+        });
+
+        result.replaceChildren(title, list);
+        highlightCurrentGameRow();
     }
 
     function appendListItem(list, label, value) {
@@ -267,20 +368,18 @@
 
         document.querySelector("header").classList.remove("readonly-hidden");
         document.getElementById("tableBox").classList.add("readonly-table-box");
+
+        populatePlayerScheduleSelect();
+
+        const scheduleBox = document.getElementById("playerScheduleBox");
+        if (scheduleBox) {
+            scheduleBox.classList.remove("readonly-hidden");
+        }
     }
 
-    function highlightCurrentGameRow() {
-        const table = document.querySelector("#tableBox table");
-        if (!table) return;
-
-        const now = new Date();
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        const rows = table.querySelectorAll("tr");
-
-        rows.forEach((row, index) => {
-            if (index === 0) return;
-
-            const timeCell = row.children[0];
+    function highlightCurrentPlayerScheduleRows(nowMinutes) {
+        document.querySelectorAll(".player-schedule-list li").forEach(row => {
+            const timeCell = row.querySelector(".schedule-time");
             if (!timeCell) return;
 
             const range = time.parseTimeRange(timeCell.innerText);
@@ -288,6 +387,30 @@
 
             row.classList.toggle("current-game", time.isMinuteInRange(nowMinutes, range));
         });
+    }
+
+    function highlightCurrentGameRow() {
+        const table = document.querySelector("#tableBox table");
+        const now = new Date();
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+        if (table) {
+            const rows = table.querySelectorAll("tr");
+
+            rows.forEach((row, index) => {
+                if (index === 0) return;
+
+                const timeCell = row.children[0];
+                if (!timeCell) return;
+
+                const range = time.parseTimeRange(timeCell.innerText);
+                if (!range) return;
+
+                row.classList.toggle("current-game", time.isMinuteInRange(nowMinutes, range));
+            });
+        }
+
+        highlightCurrentPlayerScheduleRows(nowMinutes);
     }
 
     function startGameTimeHighlighter() {
@@ -308,6 +431,7 @@
         readShareState,
         applyShareState,
         renderTable,
+        renderPlayerSchedule,
         renderStats,
         exportCSV,
         applyReadonlyMode,

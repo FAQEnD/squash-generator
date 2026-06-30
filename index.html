@@ -15,17 +15,13 @@
             <h2 id="settingsTitle">Параметри</h2>
             <div class="controls">
                 <label>Кількість ігор <input id="games" type="number" min="1" value="8" /></label>
-                <label
-                    >Кількість кортів <input id="courts" type="number" min="1" value="2"
-                /></label>
-                <label
-                    >Початок ігрової сесії <input id="startTime" type="time" value="18:40"
-                /></label>
+                <label>Кількість кортів <input id="courts" type="number" min="1" value="2" /></label>
+                <label>Початок ігрової сесії <input id="startTime" type="time" value="18:40" /></label>
 
                 <label class="seed-label">
                     Seed
                     <input id="seed" type="text" />
-                    <button id="refreshSeed" type="button" title="Оновити seed">🔄</button>
+                    <button id="refreshSeed" type="button" title="Оновити seed">↻</button>
                 </label>
             </div>
 
@@ -43,6 +39,15 @@
 
             <h2 id="resultsTitle">Результат</h2>
             <div id="tableBox"></div>
+
+            <section id="playerScheduleBox" class="player-schedule readonly-hidden" aria-live="polite">
+                <div class="player-schedule-controls">
+                    <label for="playerScheduleSelect">Гравець</label>
+                    <select id="playerScheduleSelect"></select>
+                    <button id="showPlayerScheduleBtn" type="button">Показати мій розклад</button>
+                </div>
+                <div id="playerScheduleResult" class="player-schedule-result"></div>
+            </section>
 
             <h2 id="statsTitle">Статистика</h2>
             <div id="statsBox" class="stats-box">
