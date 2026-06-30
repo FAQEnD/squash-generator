@@ -16,6 +16,7 @@
     let highlighterTimer = null;
     let lastGamesValue = null;
     let latestScheduleSlots = [];
+    let activePaymentPlayer = null;
 
     function initPlayers() {
         const box = document.getElementById("players");
@@ -98,6 +99,80 @@
         return playerAvailability;
     }
 
+    function normalizePaymentTarget(value) {
+        const rawValue = String(value || "").trim();
+        const cardDigits = rawValue.replace(/[\s-]/g, "");
+
+        if (/^[\d\s-]+$/.test(rawValue) && /^\d{16,19}$/.test(cardDigits)) {
+            return {
+                type: "card",
+                value: cardDigits,
+                label: cardDigits.replace(/(\d{4})(?=\d)/g, "$1 ").trim()
+            };
+        }
+
+        try {
+            const url = new URL(rawValue);
+            const host = url.hostname.toLowerCase();
+
+            if (
+                url.protocol === "https:" &&
+                (host === "send.monobank.ua" || host === "monobank.ua")
+            ) {
+                return {
+                    type: "mono",
+                    value: url.href,
+                    label: "Monobank"
+                };
+            }
+        } catch {
+            return null;
+        }
+
+        return null;
+    }
+
+    function readBoundedPaymentGameNumber(value, fallback, games) {
+        const number = parseInt(value, 10);
+        if (!Number.isFinite(number)) return fallback;
+
+        return Math.min(Math.max(number, 1), games);
+    }
+
+    function countAvailableGames(range, games) {
+        const from = readBoundedPaymentGameNumber(range && range.from, 1, games);
+        const to = readBoundedPaymentGameNumber(range && range.to, games, games);
+
+        return Math.max(0, to - from + 1);
+    }
+
+    function parseRentalCost(value) {
+        const cost = Number.parseFloat(String(value || "").replace(",", "."));
+
+        return Number.isFinite(cost) && cost > 0 ? cost : 0;
+    }
+
+    function calculatePaymentShares(players, playerAvailability, games, rentalCost) {
+        const cost = parseRentalCost(rentalCost);
+        const entries = players.map(player => ({
+            player,
+            games: countAvailableGames(playerAvailability && playerAvailability[player], games)
+        }));
+        const totalGames = entries.reduce((sum, entry) => sum + entry.games, 0);
+
+        if (cost <= 0 || totalGames <= 0) {
+            return [];
+        }
+
+        return entries
+            .filter(entry => entry.games > 0)
+            .map(entry => ({
+                player: entry.player,
+                games: entry.games,
+                amount: Math.ceil((cost * entry.games) / totalGames)
+            }));
+    }
+
     function readScheduleOptions() {
         const games = +document.getElementById("games").value;
         const players = getSelectedPlayers();
@@ -107,7 +182,9 @@
             games,
             courts: +document.getElementById("courts").value,
             players,
-            playerAvailability: readPlayerAvailability(players, games)
+            playerAvailability: readPlayerAvailability(players, games),
+            paymentTarget: document.getElementById("paymentTarget").value,
+            rentalCost: document.getElementById("rentalCost").value
         };
     }
 
@@ -120,7 +197,9 @@
             c: String(options.courts),
             t: document.getElementById("startTime").value,
             p: options.players,
-            a: options.playerAvailability
+            a: options.playerAvailability,
+            pay: options.paymentTarget,
+            cost: options.rentalCost
         };
     }
 
@@ -129,6 +208,8 @@
         if (state.g) document.getElementById("games").value = state.g;
         if (state.c) document.getElementById("courts").value = state.c;
         if (state.t) document.getElementById("startTime").value = state.t;
+        if (state.pay) document.getElementById("paymentTarget").value = state.pay;
+        if (state.cost) document.getElementById("rentalCost").value = state.cost;
         if (state.g) syncAvailabilityPlaceholders();
 
         if (state.p) {
@@ -258,6 +339,9 @@
         const result = document.getElementById("playerScheduleResult");
         if (!result || !player) return;
 
+        activePaymentPlayer = player;
+        highlightPaymentPlayer();
+
         const matches = findPlayerSchedule(player);
 
         if (matches.length === 0) {
@@ -334,6 +418,96 @@
             .replaceChildren(pinsSection.fragment, pairsSection.fragment);
     }
 
+    function createPaymentTargetElement(paymentTarget) {
+        if (paymentTarget.type === "mono") {
+            const link = document.createElement("a");
+            link.className = "payment-target payment-link";
+            link.href = paymentTarget.value;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.textContent = paymentTarget.label;
+            return link;
+        }
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "payment-target payment-copy";
+        button.textContent = paymentTarget.label;
+        button.title = "Скопіювати номер картки";
+        button.addEventListener("click", () => {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(paymentTarget.value);
+            }
+        });
+
+        return button;
+    }
+
+    function renderPaymentSummary(options) {
+        const main = document.querySelector("main");
+        const section = document.getElementById("paymentSection");
+        const content = document.getElementById("paymentContent");
+        const box = document.getElementById("paymentBox");
+        if (!box) return;
+
+        const paymentTarget = normalizePaymentTarget(options.paymentTarget);
+        const shares = calculatePaymentShares(
+            options.players,
+            options.playerAvailability,
+            options.games,
+            options.rentalCost
+        );
+
+        if (!paymentTarget || shares.length === 0) {
+            box.replaceChildren();
+            box.classList.add("readonly-hidden");
+            if (section) section.classList.add("readonly-hidden");
+            return;
+        }
+
+        const title = document.createElement("h3");
+        const targetRow = document.createElement("div");
+        const targetLabel = document.createElement("span");
+        const list = document.createElement("ul");
+
+        title.textContent = "Оплата";
+        targetRow.className = "payment-target-row";
+        targetLabel.className = "payment-target-label";
+        targetLabel.textContent = "Реквізити";
+        list.className = "payment-list";
+
+        targetRow.append(targetLabel, createPaymentTargetElement(paymentTarget));
+
+        shares.forEach(share => {
+            const item = document.createElement("li");
+            const name = document.createElement("span");
+            const amount = document.createElement("strong");
+
+            item.dataset.player = share.player;
+            name.textContent = `${share.player} (${share.games})`;
+            amount.textContent = `${share.amount} грн`;
+            item.append(name, amount);
+            list.append(item);
+        });
+
+        box.replaceChildren(title, targetRow, list);
+        box.classList.remove("readonly-hidden");
+        if (section) section.classList.remove("readonly-hidden");
+        if (content && (!main || !main.classList.contains("readonly-main"))) {
+            content.hidden = false;
+        }
+        highlightPaymentPlayer();
+    }
+
+    function highlightPaymentPlayer() {
+        document.querySelectorAll(".payment-list li").forEach(row => {
+            row.classList.toggle(
+                "payment-player-active",
+                activePaymentPlayer !== null && row.dataset.player === activePaymentPlayer
+            );
+        });
+    }
+
     function quoteCsvValue(value) {
         return `"${value.replace(/"/g, '""')}"`;
     }
@@ -366,6 +540,7 @@
             .querySelectorAll(".controls, .row")
             .forEach(el => el.classList.add("readonly-hidden"));
 
+        document.querySelector("main").classList.add("readonly-main");
         document.querySelector("header").classList.remove("readonly-hidden");
         document.getElementById("tableBox").classList.add("readonly-table-box");
 
@@ -374,6 +549,63 @@
         const scheduleBox = document.getElementById("playerScheduleBox");
         if (scheduleBox) {
             scheduleBox.classList.remove("readonly-hidden");
+        }
+
+        setupSharedAccordions();
+        setSharedSectionExpanded("playerSchedule", true);
+        setSharedSectionExpanded("results", false);
+        setSharedSectionExpanded("payment", false);
+    }
+
+    function getSharedSectionElements(name) {
+        return {
+            section: document.getElementById(name + "Section"),
+            toggle: document.getElementById(name + "Toggle"),
+            content: document.getElementById(name + "Content")
+        };
+    }
+
+    function setSharedSectionExpanded(name, isExpanded) {
+        const { toggle, content } = getSharedSectionElements(name);
+        if (!toggle || !content) return;
+
+        toggle.setAttribute("aria-expanded", String(isExpanded));
+        content.hidden = !isExpanded;
+    }
+
+    function toggleSharedSection(name) {
+        const { toggle } = getSharedSectionElements(name);
+        if (!toggle) return;
+
+        setSharedSectionExpanded(name, toggle.getAttribute("aria-expanded") !== "true");
+    }
+
+    function revealPaymentSection() {
+        const { section } = getSharedSectionElements("payment");
+        if (!section || section.classList.contains("readonly-hidden")) return;
+
+        setSharedSectionExpanded("payment", true);
+        if (section.scrollIntoView) {
+            section.scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
+        }
+    }
+
+    function setupSharedAccordions() {
+        ["playerSchedule", "results", "payment"].forEach(name => {
+            const { toggle } = getSharedSectionElements(name);
+            if (!toggle || toggle.dataset.boundAccordion === "true") return;
+
+            toggle.addEventListener("click", () => toggleSharedSection(name));
+            toggle.dataset.boundAccordion = "true";
+        });
+
+        const paymentButton = document.getElementById("showPaymentBtn");
+        if (paymentButton && paymentButton.dataset.boundPaymentJump !== "true") {
+            paymentButton.addEventListener("click", revealPaymentSection);
+            paymentButton.dataset.boundPaymentJump = "true";
         }
     }
 
@@ -433,8 +665,15 @@
         renderTable,
         renderPlayerSchedule,
         renderStats,
+        renderPaymentSummary,
         exportCSV,
         applyReadonlyMode,
-        startGameTimeHighlighter
+        startGameTimeHighlighter,
+        setSharedSectionExpanded,
+        toggleSharedSection,
+        revealPaymentSection,
+        normalizePaymentTarget,
+        countAvailableGames,
+        calculatePaymentShares
     };
 });

@@ -20,6 +20,7 @@ function generate() {
         schedule.courtPins,
         schedule.courtPinOrder
     );
+    ui.renderPaymentSummary(options);
 
     document.getElementById("afterGenRow").classList.remove("hidden");
     ui.startGameTimeHighlighter();
