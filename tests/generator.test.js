@@ -442,6 +442,7 @@ function setupReadonlyShell(document) {
 
     const paymentSection = document.createElement("section");
     paymentSection.id = "paymentSection";
+    paymentSection.className = "readonly-hidden";
     main.append(paymentSection);
 
     const paymentToggle = document.createElement("button");
@@ -450,6 +451,7 @@ function setupReadonlyShell(document) {
 
     const paymentContent = document.createElement("div");
     paymentContent.id = "paymentContent";
+    paymentContent.hidden = true;
     paymentSection.append(paymentContent);
 
     const paymentBox = document.createElement("div");
@@ -914,6 +916,35 @@ test("readonly mode opens personal schedule and collapses results and payment", 
         assert.equal(shell.paymentSection.classList.contains("readonly-hidden"), false);
         assert.equal(shell.paymentToggle.getAttribute("aria-expanded"), "false");
         assert.equal(shell.paymentContent.hidden, true);
+    });
+});
+
+test("admin mode does not bind shared accordion toggles", () => {
+    withFakeDocument(document => {
+        const shell = setupReadonlyShell(document);
+
+        shell.resultsToggle.click();
+
+        assert.equal(shell.main.classList.contains("readonly-main"), false);
+        assert.equal(shell.resultsToggle.getAttribute("aria-expanded"), undefined);
+        assert.equal(shell.resultsContent.hidden, false);
+    });
+});
+
+test("valid admin payment opens payment content", () => {
+    withFakeDocument(document => {
+        const shell = setupReadonlyShell(document);
+
+        ui.renderPaymentSummary({
+            players: PLAYER_LIST.slice(0, 1),
+            games: 1,
+            playerAvailability: {},
+            paymentTarget: "4444 1111 2222 3333",
+            rentalCost: "100"
+        });
+
+        assert.equal(shell.paymentSection.classList.contains("readonly-hidden"), false);
+        assert.equal(shell.paymentContent.hidden, false);
     });
 });
 
