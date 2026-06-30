@@ -29,6 +29,7 @@ const PLAYER_LIST = [
 const DEFAULT_SELECTED = new Set(["Антон","Іра","Олександр","Юля","Назар"]);
 
 let highlighterTimer = null;
+let latestScheduleSlots = [];
 
 /* ============================================================
    INIT PLAYERS
@@ -166,6 +167,7 @@ function generate(){
 function renderTable(results){
     const courts = +document.getElementById("courts").value;
     const pc = window._pairCount || {};
+    latestScheduleSlots = [];
 
     /* Read starting time */
     const start = document.getElementById("startTime").value; // "18:40"
@@ -185,12 +187,19 @@ function renderTable(results){
         const timeLabel = `${formatTime(from)}–${formatTime(to)}`;
         currentMinutes = to;
 
+        const slot = { time: timeLabel, courts: [], rest: r.rest };
+
         html += `<tr><td>${timeLabel}</td>`;
 
-        r.pairs.forEach(p=>{
+        r.pairs.forEach((p, index)=>{
+            slot.courts.push({
+                court: index + 1,
+                players: p
+            });
             html += `<td>${p[0]} – ${p[1]}</td>`;
         });
 
+        latestScheduleSlots.push(slot);
         html += `<td>${r.rest.join(", ")}</td></tr>`;
     });
 
@@ -206,6 +215,96 @@ function formatTime(totalMinutes){
     const h = Math.floor(totalMinutes / 60);
     const m = totalMinutes % 60;
     return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function getSelectedPlayers() {
+    return PLAYER_LIST.filter(p => {
+        const el = document.getElementById("p_" + p);
+        return el && el.checked;
+    });
+}
+
+function populatePlayerScheduleSelect() {
+    const select = document.getElementById("playerScheduleSelect");
+    if (!select) return;
+
+    const players = getSelectedPlayers();
+    select.innerHTML = players
+        .map(player => `<option value="${escapeHtml(player)}">${escapeHtml(player)}</option>`)
+        .join("");
+}
+
+function renderPlayerSchedule(player) {
+    const result = document.getElementById("playerScheduleResult");
+    if (!result || !player) return;
+
+    const matches = [];
+
+    latestScheduleSlots.forEach(slot => {
+        let playerMatch = null;
+
+        slot.courts.forEach(courtInfo => {
+            if (courtInfo.players.includes(player)) {
+                playerMatch = {
+                    time: slot.time,
+                    court: courtInfo.court,
+                    opponent: courtInfo.players.find(p => p !== player),
+                    isRest: false
+                };
+            }
+        });
+
+        if (playerMatch) {
+            matches.push(playerMatch);
+            return;
+        }
+
+        if (slot.rest.includes(player)) {
+            matches.push({
+                time: slot.time,
+                isRest: true
+            });
+        }
+    });
+
+    if (!matches.length) {
+        result.innerHTML = `<p class="empty-schedule">${escapeHtml(player)} не має ігор у цьому розкладі.</p>`;
+        return;
+    }
+
+    const items = matches.map(match => {
+        if (match.isRest) {
+            return `
+                <li class="schedule-rest-row">
+                    <span class="schedule-time">${escapeHtml(match.time)}</span>
+                    <span class="schedule-rest">Відпочинок</span>
+                    <span class="schedule-opponent"></span>
+                </li>
+            `;
+        }
+
+        return `
+            <li>
+                <span class="schedule-time">${escapeHtml(match.time)}</span>
+                <span class="schedule-court">Корт ${match.court}</span>
+                <span class="schedule-opponent">з ${escapeHtml(match.opponent)}</span>
+            </li>
+        `;
+    }).join("");
+
+    result.innerHTML = `
+        <h3>${escapeHtml(player)}</h3>
+        <ul class="player-schedule-list">${items}</ul>
+    `;
 }
 
 
@@ -375,6 +474,13 @@ function applyReadonlyMode(isShared) {
     // таблиця — головна
     const tableBox = document.getElementById("tableBox");
     tableBox.classList.add("readonly-table-box");
+
+    populatePlayerScheduleSelect();
+
+    const scheduleBox = document.getElementById("playerScheduleBox");
+    if (scheduleBox) {
+        scheduleBox.classList.remove("readonly-hidden");
+    }
 }
 
 
@@ -428,6 +534,10 @@ function bindEvents() {
     document.getElementById("exportCsvBtn").addEventListener("click", exportCSV);
     document.getElementById("exportPdfBtn").addEventListener("click", () => window.print());
     document.getElementById("shareBtn").addEventListener("click", shareLink);
+    document.getElementById("showPlayerScheduleBtn").addEventListener("click", () => {
+        const select = document.getElementById("playerScheduleSelect");
+        renderPlayerSchedule(select.value);
+    });
 }
 
 /* ============================================================
