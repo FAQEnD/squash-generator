@@ -55,64 +55,256 @@ function autoSeed(){
    NEW — BALANCED PLAYER PICKER
 ============================================================ */
 
-function scoreCandidateDistribution(cand, playerCount){
-    let s = 0;
-    for(let p of cand) s += playerCount[p] || 0;
-    return s;
+function scoreProjectedPlayerBalance(cand, players, playerCount){
+    const chosen = new Set(cand);
+    const projectedCounts = players.map(player =>
+        (playerCount[player] || 0) + (chosen.has(player) ? 1 : 0)
+    );
+    const min = Math.min(...projectedCounts);
+    const max = Math.max(...projectedCounts);
+    const squaredLoad = projectedCounts.reduce((sum, count) => sum + count * count, 0);
+
+    return (max - min) * 10000 + squaredLoad;
 }
 
+const COURT_PIN_PRIORITY_BASE = 3;
+
+function pairKey(A, B){
+    return A < B ? A+"-"+B : B+"-"+A;
+}
+
+function resolveDisplayedPair(A, B, playerSide){
+    const sideA = playerSide[A];
+    const sideB = playerSide[B];
+
+    if(sideA && sideB){
+        if(sideA !== sideB){
+            return sideA === "left" ? [A, B] : [B, A];
+        }
+        return [A, B];
+    }
+
+    if(sideA){
+        return sideA === "left" ? [A, B] : [B, A];
+    }
+
+    if(sideB){
+        return sideB === "left" ? [B, A] : [A, B];
+    }
+
+    return [A, B];
+}
+
+function hasSideConflict(A, B, playerSide){
+    return playerSide[A] && playerSide[A] === playerSide[B];
+}
+
+function commitDisplayedPair(A, B, playerSide){
+    const pair = resolveDisplayedPair(A, B, playerSide);
+    const left = pair[0];
+    const right = pair[1];
+
+    if(!playerSide[left]) playerSide[left] = "left";
+    if(!playerSide[right]) playerSide[right] = "right";
+
+    return pair;
+}
 function chooseBalancedPlayers(players, courts, r, pairCount, recentPairs, playerCount){
     const needed = courts * 2;
     const attempts = 400;
 
     let best = null;
-    let bestScore = Infinity;
+    let bestBalanceScore = Infinity;
 
     for(let i=0; i<attempts; i++){
         let t = [...players];
         seededShuffle(t, r);
 
         let cand = t.slice(0, needed);
-        let score = 0;
+        const balanceScore = scoreProjectedPlayerBalance(cand, players, playerCount);
 
-        for(let k=0; k<cand.length; k+=2){
-            const A=cand[k], B=cand[k+1];
-            const key = A < B ? A+"-"+B : B+"-"+A;
-
-            if(recentPairs.includes(key)) score += 500;
-            score += (pairCount[key] || 0) * 15;
-        }
-
-        score += scoreCandidateDistribution(cand, playerCount) * 3;
-
-        if(score < bestScore){
-            bestScore = score;
+        if(balanceScore < bestBalanceScore){
+            bestBalanceScore = balanceScore;
             best = cand;
         }
     }
     return best;
 }
 
-/* ============================================================
-   GENERATE
-============================================================ */
-function generate(){
-    const seed = parseInt(document.getElementById("seed").value) || 1;
+function getCourtPinPriority(player, courtPinOrder){
+    const order = courtPinOrder[player];
+    if(!order) return 0;
+
+    return Math.pow(COURT_PIN_PRIORITY_BASE, PLAYER_LIST.length - order);
+}
+
+function scorePairOnCourt(pair, court, courtPins, courtPinOrder){
+    const leftPin = courtPins[pair[0]] || 0;
+    const rightPin = courtPins[pair[1]] || 0;
+    let score = 0;
+
+    if(leftPin){
+        const priority = getCourtPinPriority(pair[0], courtPinOrder);
+        score += leftPin === court ? priority : -priority;
+    }
+
+    if(rightPin){
+        const priority = getCourtPinPriority(pair[1], courtPinOrder);
+        score += rightPin === court ? priority : -priority;
+    }
+
+    return score;
+}
+
+function getBestCourtArrangement(pairs, courtPins, courtPinOrder, courts){
+    const best = {
+        score: -Infinity,
+        pairs: pairs
+    };
+
+    function assign(remaining, court, placed, score){
+        if(court > courts){
+            if(score > best.score){
+                best.score = score;
+                best.pairs = placed;
+            }
+            return;
+        }
+
+        for(let i=0; i<remaining.length; i++){
+            const pair = remaining[i];
+            const nextRemaining = remaining.slice(0, i).concat(remaining.slice(i+1));
+            const variants = [
+                pair,
+                [pair[1], pair[0]]
+            ];
+
+            variants.forEach(variant=>{
+                assign(
+                    nextRemaining,
+                    court + 1,
+                    placed.concat([variant]),
+                    score + scorePairOnCourt(variant, court, courtPins, courtPinOrder)
+                );
+            });
+        }
+    }
+
+    assign(pairs, 1, [], 0);
+    return best;
+}
+
+function arrangePairsByCourt(pairs, courtPins, courtPinOrder, courts){
+    return getBestCourtArrangement(pairs, courtPins, courtPinOrder, courts).pairs;
+}
+
+function scorePairRepeat(pair, pairCount, recentPairs){
+    const A = pair[0];
+    const B = pair[1];
+    const key = pairKey(A, B);
+    let score = 0;
+
+    if(recentPairs.includes(key)) score += 500;
+    score += (pairCount[key] || 0) * 15;
+
+    return score;
+}
+
+function scorePairSideConflict(pair, playerSide){
+    return hasSideConflict(pair[0], pair[1], playerSide) ? 1 : 0;
+}
+
+function commitCourtPairs(pairs, playerSide){
+    return pairs.map(pair => commitDisplayedPair(pair[0], pair[1], playerSide));
+}
+
+function arrangePlayersIntoPairs(chosen, pairCount, recentPairs, courtPins, courtPinOrder, courts, playerSide){
+    const best = {
+        pairScore: Infinity,
+        sideConflicts: Infinity,
+        courtScore: -Infinity,
+        pairs: []
+    };
+
+    function build(remaining, pairs){
+        if(remaining.length === 0){
+            const arrangement = getBestCourtArrangement(pairs, courtPins, courtPinOrder, courts);
+            const pairScore = pairs.reduce(
+                (sum, pair) => sum + scorePairRepeat(pair, pairCount, recentPairs),
+                0
+            );
+            const sideConflicts = pairs.reduce(
+                (sum, pair) => sum + scorePairSideConflict(pair, playerSide),
+                0
+            );
+
+            if(
+                pairScore < best.pairScore ||
+                (
+                    pairScore === best.pairScore &&
+                    sideConflicts < best.sideConflicts
+                ) ||
+                (
+                    pairScore === best.pairScore &&
+                    sideConflicts === best.sideConflicts &&
+                    arrangement.score > best.courtScore
+                )
+            ){
+                best.pairScore = pairScore;
+                best.sideConflicts = sideConflicts;
+                best.courtScore = arrangement.score;
+                best.pairs = arrangement.pairs;
+            }
+            return;
+        }
+
+        const first = remaining[0];
+        for(let i=1; i<remaining.length; i++){
+            const pair = [first, remaining[i]];
+            const nextRemaining = remaining
+                .slice(1, i)
+                .concat(remaining.slice(i+1));
+
+            build(nextRemaining, pairs.concat([pair]));
+        }
+    }
+
+    build(chosen, []);
+    return best.pairs;
+}
+
+function assignNewCourtPins(pairs, courtPins, courtPinOrder, nextCourtPinOrder){
+    pairs.forEach((pair, index)=>{
+        const court = index + 1;
+        pair.forEach(player=>{
+            if(!courtPins[player]){
+                courtPins[player] = court;
+                courtPinOrder[player] = nextCourtPinOrder.value;
+                nextCourtPinOrder.value++;
+            }
+        });
+    });
+}
+
+function generateSchedule(options){
+    const seed = parseInt(options.seed, 10) || 1;
     const r = mulberry32(seed);
 
-    const games  = +document.getElementById("games").value;
-    const courts = +document.getElementById("courts").value;
-    const avoidN = 2;
-
-    const players = PLAYER_LIST.filter(p => document.getElementById("p_"+p).checked);
+    const games = +options.games;
+    const courts = +options.courts;
+    const players = [...options.players];
+    const avoidN = options.avoidN || 2;
 
     if(players.length < courts * 2){
-        alert("Замало гравців!");
-        return;
+        throw new Error("Замало гравців!");
     }
 
     const pairCount = {};
     const playerCount = {};
+    const courtPins = {};
+    const courtPinOrder = {};
+    const nextCourtPinOrder = { value: 1 };
+    const playerSide = {};
     players.forEach(p => playerCount[p] = 0);
 
     const recentPairs = [];
@@ -132,22 +324,31 @@ function generate(){
         const used = new Set(chosen);
         const rest = players.filter(p => !used.has(p));
 
-        const pairs = [];
+        let pairs = arrangePlayersIntoPairs(
+            chosen,
+            pairCount,
+            recentPairs,
+            courtPins,
+            courtPinOrder,
+            courts,
+            playerSide
+        );
 
-        for(let c=0; c<courts; c++){
-            const A = chosen[2*c];
-            const B = chosen[2*c+1];
+        pairs = commitCourtPairs(pairs, playerSide);
 
-            const key = A < B ? A+"-"+B : B+"-"+A;
+        pairs.forEach(pair=>{
+            const A = pair[0];
+            const B = pair[1];
+            const key = pairKey(A, B);
 
             pairCount[key] = (pairCount[key] || 0) + 1;
             recentPairs.push(key);
 
-            pairs.push([A,B]);
-
             playerCount[A]++;
             playerCount[B]++;
-        }
+        });
+
+        assignNewCourtPins(pairs, courtPins, courtPinOrder, nextCourtPinOrder);
 
         while(recentPairs.length > avoidN * courts)
             recentPairs.shift();
@@ -155,10 +356,42 @@ function generate(){
         results.push({ game:g, pairs, rest });
     }
 
-    window._pairCount = pairCount;
+    return {
+        results,
+        pairCount,
+        playerCount,
+        courtPins,
+        courtPinOrder
+    };
+}
 
-    renderTable(results);
-    renderStats(playerCount, pairCount);
+/* ============================================================
+   GENERATE
+============================================================ */
+function generate(){
+    const seed = document.getElementById("seed").value;
+    const games  = +document.getElementById("games").value;
+    const courts = +document.getElementById("courts").value;
+
+    const players = PLAYER_LIST.filter(p => document.getElementById("p_"+p).checked);
+
+    let schedule;
+    try{
+        schedule = generateSchedule({
+            players,
+            games,
+            courts,
+            seed
+        });
+    }catch(e){
+        alert("Замало гравців!");
+        return;
+    }
+
+    window._pairCount = schedule.pairCount;
+
+    renderTable(schedule.results);
+    renderStats(schedule.playerCount, schedule.pairCount, schedule.courtPins, schedule.courtPinOrder);
 
     document.getElementById("afterGenRow").classList.remove("hidden");
     startGameTimeHighlighter();
@@ -312,11 +545,18 @@ function renderPlayerSchedule(player) {
 /* ============================================================
    RENDER STATS
 ============================================================ */
-function renderStats(playerCount, pairCount){
+function renderStats(playerCount, pairCount, courtPins, courtPinOrder){
     let p = "<h3>Ігри гравців</h3><ul>";
     for(const pl in playerCount)
         p+=`<li>${pl}: ${playerCount[pl]}</li>`;
     p+="</ul>";
+
+    let c = "<h3>Прив'язка до кортів</h3><ul>";
+    for(const pl in playerCount){
+        const court = courtPins[pl] ? `Корт ${courtPins[pl]} (#${courtPinOrder[pl]})` : "не призначено";
+        c+=`<li>${pl}: ${court}</li>`;
+    }
+    c+="</ul>";
 
     let s="<h3>Статистика пар</h3><ul>";
     for(const k in pairCount)
@@ -324,7 +564,7 @@ function renderStats(playerCount, pairCount){
     s+="</ul>";
 
     document.getElementById("statsPlayers").innerHTML = p;
-    document.getElementById("statsPairs").innerHTML = s;
+    document.getElementById("statsPairs").innerHTML = c + s;
 }
 
 /* ============================================================
@@ -543,6 +783,15 @@ function bindEvents() {
 /* ============================================================
    ✅ INIT
 ============================================================ */
+if(typeof module !== "undefined"){
+    module.exports = {
+        PLAYER_LIST,
+        generateSchedule,
+        scorePairOnCourt
+    };
+}
+
+if(typeof document !== "undefined"){
 initPlayers();
 bindEvents();
 autoSeed();
@@ -551,4 +800,5 @@ if (loadFromHash())
 {
   generate();
   applyReadonlyMode(true);
+}
 }
