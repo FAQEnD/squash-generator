@@ -462,6 +462,7 @@
             box.replaceChildren();
             box.classList.add("readonly-hidden");
             if (section) section.classList.add("readonly-hidden");
+            if (content) content.hidden = true;
             return;
         }
 
@@ -493,8 +494,8 @@
         box.replaceChildren(title, targetRow, list);
         box.classList.remove("readonly-hidden");
         if (section) section.classList.remove("readonly-hidden");
-        if (content && (!main || !main.classList.contains("readonly-main"))) {
-            content.hidden = false;
+        if (content) {
+            content.hidden = Boolean(main && main.classList.contains("readonly-main"));
         }
         highlightPaymentPlayer();
     }
@@ -554,7 +555,11 @@
         setupSharedAccordions();
         setSharedSectionExpanded("playerSchedule", true);
         setSharedSectionExpanded("results", false);
-        setSharedSectionExpanded("payment", false);
+
+        const paymentSection = document.getElementById("paymentSection");
+        if (paymentSection && !paymentSection.classList.contains("readonly-hidden")) {
+            setSharedSectionExpanded("payment", false);
+        }
     }
 
     function getSharedSectionElements(name) {

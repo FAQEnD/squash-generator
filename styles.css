@@ -94,6 +94,7 @@ input[type="checkbox"]:checked::after {
 
 input[type="number"],
 input[type="text"],
+input[type="time"],
 select {
     width: 140px;
     padding: 8px;
@@ -243,7 +244,7 @@ td {
 }
 
 .shared-section-toggle {
-    display: none;
+    display: none !important;
 }
 
 .shared-section-content[hidden] {
@@ -327,6 +328,16 @@ td {
     margin-top: 12px;
 }
 
+#tableBox {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+#tableBox table {
+    min-width: 560px;
+}
+
 main.readonly-main .shared-section {
     background: white;
     border: 1px solid #ddd;
@@ -336,7 +347,7 @@ main.readonly-main .shared-section {
 }
 
 main.readonly-main .shared-section-toggle {
-    display: flex;
+    display: flex !important;
     width: 100%;
     align-items: center;
     justify-content: space-between;
@@ -348,12 +359,12 @@ main.readonly-main .shared-section-toggle {
 }
 
 main.readonly-main .shared-section-toggle::after {
-    content: "⌄";
+    content: "v";
     font-size: 1.1rem;
 }
 
 main.readonly-main .shared-section-toggle[aria-expanded="true"]::after {
-    content: "⌃";
+    content: "^";
 }
 
 main.readonly-main .shared-section-content {
@@ -473,5 +484,78 @@ main.readonly-main .player-schedule {
         grid-template-columns: 1fr;
         gap: 4px;
         text-align: left;
+    }
+}
+
+@media (max-width: 720px) {
+    main {
+        padding: 12px;
+    }
+
+    .controls {
+        max-width: 100%;
+    }
+
+    .controls label {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(120px, 150px);
+        align-items: center;
+        gap: 8px;
+    }
+
+    .seed-label {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px;
+    }
+
+    input[type="number"],
+    input[type="text"],
+    input[type="time"],
+    select {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .row,
+    .export-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        width: 100%;
+    }
+
+    .player-schedule-controls {
+        grid-template-columns: 1fr;
+    }
+
+    .player-schedule-controls label {
+        display: block;
+    }
+
+    .player-schedule-controls button,
+    .payment-jump-btn {
+        width: 100%;
+    }
+
+    main.readonly-main .shared-section-toggle,
+    main.readonly-main .shared-section-content {
+        padding: 12px;
+    }
+
+    .payment-target-row,
+    .payment-list li {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .payment-target {
+        width: 100%;
+        box-sizing: border-box;
+        text-align: center;
+    }
+}
+
+@media (max-width: 420px) {
+    .controls label,
+    .seed-label {
+        grid-template-columns: 1fr;
     }
 }
