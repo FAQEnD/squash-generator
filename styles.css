@@ -242,6 +242,82 @@ td {
     margin-top: 10px;
 }
 
+.shared-section-toggle {
+    display: none;
+}
+
+.shared-section-content[hidden] {
+    display: none !important;
+}
+
+.payment-box {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-top: 16px;
+    padding: 14px;
+}
+
+.payment-box h3 {
+    margin: 0 0 12px;
+    font-size: 1.05rem;
+}
+
+.payment-target-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.payment-target-label {
+    color: #555;
+    font-weight: 700;
+}
+
+.payment-target {
+    width: auto;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+}
+
+.payment-link {
+    display: inline-block;
+    background: #007aff;
+    color: white;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.payment-list {
+    display: grid;
+    gap: 8px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.payment-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px;
+    border: 1px solid #e2e2e2;
+    border-radius: 6px;
+    background: #fafafa;
+}
+
+.payment-list li.payment-player-active {
+    border-color: #007aff;
+    background: #eaf3ff;
+}
+
+.payment-list li.payment-player-active strong {
+    color: #0057b8;
+}
+
 .readonly-hidden {
     display: none !important;
 }
@@ -249,6 +325,56 @@ td {
 .readonly-table-box {
     display: block;
     margin-top: 12px;
+}
+
+main.readonly-main .shared-section {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-top: 16px;
+    overflow: hidden;
+}
+
+main.readonly-main .shared-section-toggle {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 0;
+    background: white;
+    color: #222;
+    padding: 14px;
+    text-align: left;
+}
+
+main.readonly-main .shared-section-toggle::after {
+    content: "⌄";
+    font-size: 1.1rem;
+}
+
+main.readonly-main .shared-section-toggle[aria-expanded="true"]::after {
+    content: "⌃";
+}
+
+main.readonly-main .shared-section-content {
+    border-top: 1px solid #e2e2e2;
+    padding: 14px;
+}
+
+main.readonly-main #resultsTitle {
+    display: none;
+}
+
+main.readonly-main table {
+    margin-top: 0;
+}
+
+main.readonly-main .payment-box,
+main.readonly-main .player-schedule {
+    border: 0;
+    border-radius: 0;
+    margin-top: 0;
+    padding: 0;
 }
 
 .player-schedule {
@@ -259,16 +385,28 @@ td {
     padding: 14px;
 }
 
+main.readonly-main .player-schedule {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-top: 16px;
+    padding: 0;
+}
+
 .player-schedule-controls {
     display: grid;
-    grid-template-columns: auto minmax(150px, 1fr) auto;
+    grid-template-columns: auto minmax(150px, 1fr) auto auto;
     align-items: center;
     gap: 10px;
 }
 
-.player-schedule-controls button {
+.player-schedule-controls button,
+.payment-jump-btn {
     width: auto;
     padding: 10px 14px;
+}
+
+.payment-jump-btn {
+    background: #444;
 }
 
 .player-schedule-result h3 {

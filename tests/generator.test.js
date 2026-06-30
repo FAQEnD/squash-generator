@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 
 const { PLAYER_LIST, generateSchedule } = require("../src/generator.js");
+const config = require("../src/config.js");
 const { formatTime, formatTimeRange, parseTimeRange, isMinuteInRange } = require("../src/time.js");
 const { createShareUrl, decodeState } = require("../src/share-state.js");
 const ui = require("../src/ui.js");
@@ -195,6 +196,10 @@ class FakeElement {
         this._className = "";
         this._textContent = "";
         this.value = "";
+        this.eventListeners = {};
+        this.dataset = {};
+        this.hidden = false;
+        this.scrollIntoViewCalled = false;
     }
 
     set id(value) {
@@ -228,6 +233,27 @@ class FakeElement {
 
     get innerText() {
         return this.textContent;
+    }
+
+    setAttribute(name, value) {
+        this.attributes[name] = String(value);
+    }
+
+    getAttribute(name) {
+        return this.attributes[name];
+    }
+
+    addEventListener(type, listener) {
+        this.eventListeners[type] = this.eventListeners[type] || [];
+        this.eventListeners[type].push(listener);
+    }
+
+    click() {
+        (this.eventListeners.click || []).forEach(listener => listener());
+    }
+
+    scrollIntoView() {
+        this.scrollIntoViewCalled = true;
     }
 
     append(...nodes) {
@@ -283,6 +309,13 @@ class FakeDocument {
 }
 
 function queryFrom(root, selector) {
+    if (selector.includes(",")) {
+        return selector
+            .split(",")
+            .flatMap(part => queryFrom(root, part.trim()))
+            .filter((element, index, all) => all.indexOf(element) === index);
+    }
+
     if (selector === "#tableBox table") {
         const tableBox = root.ownerDocument.getElementById("tableBox");
         return tableBox ? descendants(tableBox).filter(el => el.tagName === "TABLE") : [];
@@ -291,6 +324,12 @@ function queryFrom(root, selector) {
     if (selector === ".player-schedule-list li") {
         return descendants(root).filter(
             el => el.tagName === "LI" && hasAncestorWithClass(el, "player-schedule-list")
+        );
+    }
+
+    if (selector === ".payment-list li") {
+        return descendants(root).filter(
+            el => el.tagName === "LI" && hasAncestorWithClass(el, "payment-list")
         );
     }
 
@@ -309,6 +348,11 @@ function queryFrom(root, selector) {
 
     if (/^[a-z]+$/i.test(selector)) {
         return descendants(root).filter(el => el.tagName === selector.toUpperCase());
+    }
+
+    if (/^\.[\w-]+$/.test(selector)) {
+        const className = selector.slice(1);
+        return descendants(root).filter(el => el.classList.contains(className));
     }
 
     return [];
@@ -333,6 +377,102 @@ function appendRoot(document, id, value = "") {
     element.value = value;
     document.body.append(element);
     return element;
+}
+
+function appendRootElement(document, tagName, id, className = "") {
+    const element = document.createElement(tagName);
+    element.id = id;
+    element.className = className;
+    document.body.append(element);
+    return element;
+}
+
+function setupReadonlyShell(document) {
+    appendRootElement(document, "header", "header");
+    const main = appendRootElement(document, "main", "main");
+
+    ["playersTitle", "players", "settingsTitle", "statsTitle", "statsBox", "tableBox"].forEach(
+        id => {
+            const element = document.createElement("div");
+            element.id = id;
+            main.append(element);
+        }
+    );
+
+    const controls = document.createElement("div");
+    controls.className = "controls";
+    main.append(controls);
+
+    const row = document.createElement("div");
+    row.className = "row";
+    main.append(row);
+
+    const playerScheduleBox = document.createElement("section");
+    playerScheduleBox.id = "playerScheduleBox";
+    playerScheduleBox.className = "readonly-hidden";
+    main.append(playerScheduleBox);
+
+    const playerToggle = document.createElement("button");
+    playerToggle.id = "playerScheduleToggle";
+    playerScheduleBox.append(playerToggle);
+
+    const playerContent = document.createElement("div");
+    playerContent.id = "playerScheduleContent";
+    playerScheduleBox.append(playerContent);
+
+    const playerSelect = document.createElement("select");
+    playerSelect.id = "playerScheduleSelect";
+    playerContent.append(playerSelect);
+
+    const showPaymentButton = document.createElement("button");
+    showPaymentButton.id = "showPaymentBtn";
+    playerContent.append(showPaymentButton);
+
+    const resultsSection = document.createElement("section");
+    resultsSection.id = "resultsSection";
+    main.append(resultsSection);
+
+    const resultsToggle = document.createElement("button");
+    resultsToggle.id = "resultsToggle";
+    resultsSection.append(resultsToggle);
+
+    const resultsContent = document.createElement("div");
+    resultsContent.id = "resultsContent";
+    resultsSection.append(resultsContent);
+
+    const paymentSection = document.createElement("section");
+    paymentSection.id = "paymentSection";
+    main.append(paymentSection);
+
+    const paymentToggle = document.createElement("button");
+    paymentToggle.id = "paymentToggle";
+    paymentSection.append(paymentToggle);
+
+    const paymentContent = document.createElement("div");
+    paymentContent.id = "paymentContent";
+    paymentSection.append(paymentContent);
+
+    const paymentBox = document.createElement("div");
+    paymentBox.id = "paymentBox";
+    paymentContent.append(paymentBox);
+
+    config.PLAYER_LIST.forEach(player => {
+        const checkbox = document.createElement("input");
+        checkbox.id = "p_" + player;
+        checkbox.checked = config.DEFAULT_SELECTED.has(player);
+        main.append(checkbox);
+    });
+
+    return {
+        main,
+        playerContent,
+        resultsToggle,
+        resultsContent,
+        paymentSection,
+        paymentToggle,
+        paymentContent,
+        showPaymentButton
+    };
 }
 
 function withFakeDate(isoDate, fn) {
@@ -579,12 +719,381 @@ test("encodes and decodes share state", () => {
                 from: "1",
                 to: "2"
             }
-        }
+        },
+        pay: "4444 1111 2222 3333",
+        cost: "1200"
     };
     const url = createShareUrl({ origin: "https://example.com", pathname: "/matches/" }, state);
     const hash = new URL(url).hash;
 
     assert.deepEqual(decodeState(hash), state);
+});
+
+test("recognizes and normalizes card payment targets", () => {
+    assert.deepEqual(ui.normalizePaymentTarget("4444 1111-2222 3333"), {
+        type: "card",
+        value: "4444111122223333",
+        label: "4444 1111 2222 3333"
+    });
+});
+
+test("recognizes monobank payment links", () => {
+    assert.deepEqual(ui.normalizePaymentTarget("https://send.monobank.ua/jar/example"), {
+        type: "mono",
+        value: "https://send.monobank.ua/jar/example",
+        label: "Monobank"
+    });
+});
+
+test("rejects invalid payment targets", () => {
+    assert.equal(ui.normalizePaymentTarget("not a payment target"), null);
+    assert.equal(ui.normalizePaymentTarget("12345"), null);
+    assert.equal(ui.normalizePaymentTarget("http://send.monobank.ua/jar/example"), null);
+});
+
+test("counts payment availability inside schedule bounds", () => {
+    assert.equal(ui.countAvailableGames({ from: "0", to: "99" }, 8), 8);
+    assert.equal(ui.countAvailableGames({ from: "3", to: "6" }, 8), 4);
+    assert.equal(ui.countAvailableGames({ from: "7", to: "3" }, 8), 0);
+});
+
+test("calculates payment shares from availability and rounds up", () => {
+    const players = PLAYER_LIST.slice(0, 3);
+    const shares = ui.calculatePaymentShares(
+        players,
+        {
+            [players[0]]: {
+                from: "1",
+                to: "3"
+            },
+            [players[1]]: {
+                from: "1",
+                to: "1"
+            },
+            [players[2]]: {
+                from: "2",
+                to: "3"
+            }
+        },
+        3,
+        "100"
+    );
+
+    assert.deepEqual(shares, [
+        {
+            player: players[0],
+            games: 3,
+            amount: 50
+        },
+        {
+            player: players[1],
+            games: 1,
+            amount: 17
+        },
+        {
+            player: players[2],
+            games: 2,
+            amount: 34
+        }
+    ]);
+});
+
+test("renders readonly payment summary for a valid card", () => {
+    withFakeDocument(document => {
+        const paymentBox = appendRoot(document, "paymentBox");
+        const players = PLAYER_LIST.slice(0, 2);
+
+        ui.renderPaymentSummary({
+            players,
+            games: 4,
+            playerAvailability: {
+                [players[0]]: {
+                    from: "1",
+                    to: "4"
+                },
+                [players[1]]: {
+                    from: "1",
+                    to: "2"
+                }
+            },
+            paymentTarget: "4444 1111 2222 3333",
+            rentalCost: "600"
+        });
+
+        const copyButton = descendants(paymentBox).find(el =>
+            el.classList.contains("payment-copy")
+        );
+        const rows = descendants(paymentBox).filter(el => el.tagName === "LI");
+
+        assert.equal(paymentBox.classList.contains("readonly-hidden"), false);
+        assert.ok(copyButton);
+        assert.equal(copyButton.textContent, "4444 1111 2222 3333");
+        assert.equal(rows.length, 2);
+        assert.equal(rows[0].innerText.includes("400 грн"), true);
+        assert.equal(rows[1].innerText.includes("200 грн"), true);
+    });
+});
+
+test("renders readonly payment summary for a monobank link", () => {
+    withFakeDocument(document => {
+        const paymentBox = appendRoot(document, "paymentBox");
+
+        ui.renderPaymentSummary({
+            players: PLAYER_LIST.slice(0, 1),
+            games: 1,
+            playerAvailability: {},
+            paymentTarget: "https://send.monobank.ua/jar/example",
+            rentalCost: "100"
+        });
+
+        const link = descendants(paymentBox).find(el => el.classList.contains("payment-link"));
+
+        assert.equal(paymentBox.classList.contains("readonly-hidden"), false);
+        assert.ok(link);
+        assert.equal(link.href, "https://send.monobank.ua/jar/example");
+        assert.equal(link.textContent, "Monobank");
+    });
+});
+
+test("hides readonly payment summary without a valid target or cost", () => {
+    withFakeDocument(document => {
+        const paymentBox = appendRoot(document, "paymentBox");
+        const paymentSection = appendRoot(document, "paymentSection");
+
+        ui.renderPaymentSummary({
+            players: PLAYER_LIST.slice(0, 1),
+            games: 1,
+            playerAvailability: {},
+            paymentTarget: "not valid",
+            rentalCost: "100"
+        });
+
+        assert.equal(paymentBox.classList.contains("readonly-hidden"), true);
+        assert.equal(paymentSection.classList.contains("readonly-hidden"), true);
+        assert.equal(paymentBox.children.length, 0);
+
+        ui.renderPaymentSummary({
+            players: PLAYER_LIST.slice(0, 1),
+            games: 1,
+            playerAvailability: {},
+            paymentTarget: "4444 1111 2222 3333",
+            rentalCost: ""
+        });
+
+        assert.equal(paymentBox.classList.contains("readonly-hidden"), true);
+        assert.equal(paymentSection.classList.contains("readonly-hidden"), true);
+        assert.equal(paymentBox.children.length, 0);
+    });
+});
+
+test("readonly mode opens personal schedule and collapses results and payment", () => {
+    withFakeDocument(document => {
+        const shell = setupReadonlyShell(document);
+
+        ui.renderPaymentSummary({
+            players: PLAYER_LIST.slice(0, 1),
+            games: 1,
+            playerAvailability: {},
+            paymentTarget: "4444 1111 2222 3333",
+            rentalCost: "100"
+        });
+        ui.applyReadonlyMode(true);
+
+        assert.equal(shell.main.classList.contains("readonly-main"), true);
+        assert.equal(
+            document.getElementById("playerScheduleBox").classList.contains("readonly-hidden"),
+            false
+        );
+        assert.equal(
+            document.getElementById("playerScheduleToggle").getAttribute("aria-expanded"),
+            "true"
+        );
+        assert.equal(shell.playerContent.hidden, false);
+        assert.equal(shell.resultsToggle.getAttribute("aria-expanded"), "false");
+        assert.equal(shell.resultsContent.hidden, true);
+        assert.equal(shell.paymentSection.classList.contains("readonly-hidden"), false);
+        assert.equal(shell.paymentToggle.getAttribute("aria-expanded"), "false");
+        assert.equal(shell.paymentContent.hidden, true);
+    });
+});
+
+test("shared section toggle updates expanded state", () => {
+    withFakeDocument(document => {
+        const shell = setupReadonlyShell(document);
+
+        ui.applyReadonlyMode(true);
+        shell.resultsToggle.click();
+
+        assert.equal(shell.resultsToggle.getAttribute("aria-expanded"), "true");
+        assert.equal(shell.resultsContent.hidden, false);
+
+        shell.resultsToggle.click();
+
+        assert.equal(shell.resultsToggle.getAttribute("aria-expanded"), "false");
+        assert.equal(shell.resultsContent.hidden, true);
+    });
+});
+
+test("payment jump opens payment section and scrolls to it", () => {
+    withFakeDocument(document => {
+        const shell = setupReadonlyShell(document);
+
+        ui.renderPaymentSummary({
+            players: PLAYER_LIST.slice(0, 1),
+            games: 1,
+            playerAvailability: {},
+            paymentTarget: "https://send.monobank.ua/jar/example",
+            rentalCost: "100"
+        });
+        ui.applyReadonlyMode(true);
+        shell.showPaymentButton.click();
+
+        assert.equal(shell.paymentToggle.getAttribute("aria-expanded"), "true");
+        assert.equal(shell.paymentContent.hidden, false);
+        assert.equal(shell.paymentSection.scrollIntoViewCalled, true);
+    });
+});
+
+test("highlights selected player in the payment list", () => {
+    withFakeDocument(document => {
+        appendRoot(document, "startTime", "18:40");
+        appendRoot(document, "tableBox");
+        appendRoot(document, "playerScheduleResult");
+        const paymentBox = appendRoot(document, "paymentBox");
+        const players = ["Anton", "Nazar"];
+
+        ui.renderTable(
+            [
+                {
+                    game: 1,
+                    pairs: [["Anton", "Nazar"]],
+                    rest: []
+                }
+            ],
+            1
+        );
+        ui.renderPaymentSummary({
+            players,
+            games: 1,
+            playerAvailability: {},
+            paymentTarget: "4444 1111 2222 3333",
+            rentalCost: "200"
+        });
+        ui.renderPlayerSchedule("Nazar");
+
+        const rows = descendants(paymentBox).filter(el => el.tagName === "LI");
+
+        assert.equal(rows[0].classList.contains("payment-player-active"), false);
+        assert.equal(rows[1].classList.contains("payment-player-active"), true);
+    });
+});
+
+test("keeps selected payment highlight after payment rerender", () => {
+    withFakeDocument(document => {
+        appendRoot(document, "startTime", "18:40");
+        appendRoot(document, "tableBox");
+        appendRoot(document, "playerScheduleResult");
+        const paymentBox = appendRoot(document, "paymentBox");
+        const players = ["Anton", "Nazar"];
+
+        ui.renderTable(
+            [
+                {
+                    game: 1,
+                    pairs: [["Anton", "Nazar"]],
+                    rest: []
+                }
+            ],
+            1
+        );
+        ui.renderPaymentSummary({
+            players,
+            games: 1,
+            playerAvailability: {},
+            paymentTarget: "4444 1111 2222 3333",
+            rentalCost: "200"
+        });
+        ui.renderPlayerSchedule("Nazar");
+        ui.renderPaymentSummary({
+            players,
+            games: 1,
+            playerAvailability: {},
+            paymentTarget: "4444 1111 2222 3333",
+            rentalCost: "300"
+        });
+
+        const rows = descendants(paymentBox).filter(el => el.tagName === "LI");
+
+        assert.equal(rows[1].classList.contains("payment-player-active"), true);
+    });
+});
+
+test("moves payment highlight when another player is selected", () => {
+    withFakeDocument(document => {
+        appendRoot(document, "startTime", "18:40");
+        appendRoot(document, "tableBox");
+        appendRoot(document, "playerScheduleResult");
+        const paymentBox = appendRoot(document, "paymentBox");
+        const players = ["Anton", "Nazar"];
+
+        ui.renderTable(
+            [
+                {
+                    game: 1,
+                    pairs: [["Anton", "Nazar"]],
+                    rest: []
+                }
+            ],
+            1
+        );
+        ui.renderPaymentSummary({
+            players,
+            games: 1,
+            playerAvailability: {},
+            paymentTarget: "4444 1111 2222 3333",
+            rentalCost: "200"
+        });
+        ui.renderPlayerSchedule("Nazar");
+        ui.renderPlayerSchedule("Anton");
+
+        const rows = descendants(paymentBox).filter(el => el.tagName === "LI");
+
+        assert.equal(rows[0].classList.contains("payment-player-active"), true);
+        assert.equal(rows[1].classList.contains("payment-player-active"), false);
+    });
+});
+
+test("selecting a player without a payment row does not fail", () => {
+    withFakeDocument(document => {
+        appendRoot(document, "startTime", "18:40");
+        appendRoot(document, "tableBox");
+        appendRoot(document, "playerScheduleResult");
+        const paymentBox = appendRoot(document, "paymentBox");
+
+        ui.renderTable(
+            [
+                {
+                    game: 1,
+                    pairs: [["Anton", "Nazar"]],
+                    rest: []
+                }
+            ],
+            1
+        );
+        ui.renderPaymentSummary({
+            players: ["Anton"],
+            games: 1,
+            playerAvailability: {},
+            paymentTarget: "4444 1111 2222 3333",
+            rentalCost: "100"
+        });
+        ui.renderPlayerSchedule("Nazar");
+
+        const rows = descendants(paymentBox).filter(el => el.tagName === "LI");
+
+        assert.equal(rows.length, 1);
+        assert.equal(rows[0].classList.contains("payment-player-active"), false);
+    });
 });
 
 test("renders player schedule with rest rows and highlights the current slot", () => {

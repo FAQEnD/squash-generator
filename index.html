@@ -15,8 +15,18 @@
             <h2 id="settingsTitle">Параметри</h2>
             <div class="controls">
                 <label>Кількість ігор <input id="games" type="number" min="1" value="8" /></label>
-                <label>Кількість кортів <input id="courts" type="number" min="1" value="2" /></label>
-                <label>Початок ігрової сесії <input id="startTime" type="time" value="18:40" /></label>
+                <label
+                    >Кількість кортів <input id="courts" type="number" min="1" value="2"
+                /></label>
+                <label
+                    >Початок ігрової сесії <input id="startTime" type="time" value="18:40"
+                /></label>
+                <label
+                    >Вартість оренди <input id="rentalCost" type="number" min="0" step="1"
+                /></label>
+                <label
+                    >Оплата <input id="paymentTarget" type="text" placeholder="Картка або Monobank"
+                /></label>
 
                 <label class="seed-label">
                     Seed
@@ -37,16 +47,68 @@
                 <button class="share-btn" id="shareBtn">Поділитися</button>
             </div>
 
-            <h2 id="resultsTitle">Результат</h2>
-            <div id="tableBox"></div>
-
-            <section id="playerScheduleBox" class="player-schedule readonly-hidden" aria-live="polite">
-                <div class="player-schedule-controls">
-                    <label for="playerScheduleSelect">Гравець</label>
-                    <select id="playerScheduleSelect"></select>
-                    <button id="showPlayerScheduleBtn" type="button">Показати мій розклад</button>
+            <section
+                id="playerScheduleBox"
+                class="shared-section player-schedule readonly-hidden"
+                aria-live="polite"
+            >
+                <button
+                    id="playerScheduleToggle"
+                    class="shared-section-toggle"
+                    type="button"
+                    aria-expanded="true"
+                    aria-controls="playerScheduleContent"
+                >
+                    Мої ігри
+                </button>
+                <div id="playerScheduleContent" class="shared-section-content">
+                    <div class="player-schedule-controls">
+                        <label for="playerScheduleSelect">Гравець</label>
+                        <select id="playerScheduleSelect"></select>
+                        <button id="showPlayerScheduleBtn" type="button">
+                            Показати мій розклад
+                        </button>
+                        <button id="showPaymentBtn" class="payment-jump-btn" type="button">
+                            Скільки сплатити?
+                        </button>
+                    </div>
+                    <div id="playerScheduleResult" class="player-schedule-result"></div>
                 </div>
-                <div id="playerScheduleResult" class="player-schedule-result"></div>
+            </section>
+
+            <section id="resultsSection" class="shared-section results-section">
+                <button
+                    id="resultsToggle"
+                    class="shared-section-toggle"
+                    type="button"
+                    aria-expanded="true"
+                    aria-controls="resultsContent"
+                >
+                    Результат
+                </button>
+                <div id="resultsContent" class="shared-section-content">
+                    <h2 id="resultsTitle">Результат</h2>
+                    <div id="tableBox"></div>
+                </div>
+            </section>
+
+            <section id="paymentSection" class="shared-section payment-section readonly-hidden">
+                <button
+                    id="paymentToggle"
+                    class="shared-section-toggle"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="paymentContent"
+                >
+                    Оплата
+                </button>
+                <div id="paymentContent" class="shared-section-content" hidden>
+                    <div
+                        id="paymentBox"
+                        class="payment-box readonly-hidden"
+                        aria-live="polite"
+                    ></div>
+                </div>
             </section>
 
             <h2 id="statsTitle">Статистика</h2>
