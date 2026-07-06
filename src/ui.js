@@ -443,6 +443,13 @@
         return button;
     }
 
+    function setPaymentJumpVisible(isVisible) {
+        const button = document.getElementById("showPaymentBtn");
+        if (!button) return;
+
+        button.classList.toggle("readonly-hidden", !isVisible);
+    }
+
     function renderPaymentSummary(options) {
         const main = document.querySelector("main");
         const section = document.getElementById("paymentSection");
@@ -458,11 +465,12 @@
             options.rentalCost
         );
 
-        if (!paymentTarget || shares.length === 0) {
+        if (shares.length === 0) {
             box.replaceChildren();
             box.classList.add("readonly-hidden");
             if (section) section.classList.add("readonly-hidden");
             if (content) content.hidden = true;
+            setPaymentJumpVisible(false);
             return;
         }
 
@@ -477,7 +485,9 @@
         targetLabel.textContent = "Реквізити";
         list.className = "payment-list";
 
-        targetRow.append(targetLabel, createPaymentTargetElement(paymentTarget));
+        if (paymentTarget) {
+            targetRow.append(targetLabel, createPaymentTargetElement(paymentTarget));
+        }
 
         shares.forEach(share => {
             const item = document.createElement("li");
@@ -491,12 +501,13 @@
             list.append(item);
         });
 
-        box.replaceChildren(title, targetRow, list);
+        box.replaceChildren(title, ...(paymentTarget ? [targetRow] : []), list);
         box.classList.remove("readonly-hidden");
         if (section) section.classList.remove("readonly-hidden");
         if (content) {
             content.hidden = Boolean(main && main.classList.contains("readonly-main"));
         }
+        setPaymentJumpVisible(true);
         highlightPaymentPlayer();
     }
 

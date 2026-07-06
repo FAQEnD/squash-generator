@@ -857,10 +857,11 @@ test("renders readonly payment summary for a monobank link", () => {
     });
 });
 
-test("hides readonly payment summary without a valid target or cost", () => {
+test("renders readonly payment summary without valid payment details", () => {
     withFakeDocument(document => {
         const paymentBox = appendRoot(document, "paymentBox");
         const paymentSection = appendRoot(document, "paymentSection");
+        const showPaymentButton = appendRoot(document, "showPaymentBtn");
 
         ui.renderPaymentSummary({
             players: PLAYER_LIST.slice(0, 1),
@@ -870,9 +871,25 @@ test("hides readonly payment summary without a valid target or cost", () => {
             rentalCost: "100"
         });
 
-        assert.equal(paymentBox.classList.contains("readonly-hidden"), true);
-        assert.equal(paymentSection.classList.contains("readonly-hidden"), true);
-        assert.equal(paymentBox.children.length, 0);
+        const paymentTarget = descendants(paymentBox).find(el =>
+            el.classList.contains("payment-target")
+        );
+        const rows = descendants(paymentBox).filter(el => el.tagName === "LI");
+
+        assert.equal(paymentBox.classList.contains("readonly-hidden"), false);
+        assert.equal(paymentSection.classList.contains("readonly-hidden"), false);
+        assert.equal(showPaymentButton.classList.contains("readonly-hidden"), false);
+        assert.equal(paymentTarget, undefined);
+        assert.equal(rows.length, 1);
+        assert.equal(rows[0].innerText.includes("100"), true);
+    });
+});
+
+test("hides readonly payment summary without a cost", () => {
+    withFakeDocument(document => {
+        const paymentBox = appendRoot(document, "paymentBox");
+        const paymentSection = appendRoot(document, "paymentSection");
+        const showPaymentButton = appendRoot(document, "showPaymentBtn");
 
         ui.renderPaymentSummary({
             players: PLAYER_LIST.slice(0, 1),
@@ -884,6 +901,7 @@ test("hides readonly payment summary without a valid target or cost", () => {
 
         assert.equal(paymentBox.classList.contains("readonly-hidden"), true);
         assert.equal(paymentSection.classList.contains("readonly-hidden"), true);
+        assert.equal(showPaymentButton.classList.contains("readonly-hidden"), true);
         assert.equal(paymentBox.children.length, 0);
     });
 });
