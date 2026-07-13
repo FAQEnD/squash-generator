@@ -13,12 +13,13 @@ function generate() {
         return;
     }
 
-    ui.renderTable(schedule.results, options.courts);
+    ui.renderTable(schedule.results, options.courts, options.courtLabels);
     ui.renderStats(
         schedule.playerCount,
         schedule.pairCount,
         schedule.courtPins,
-        schedule.courtPinOrder
+        schedule.courtPinOrder,
+        options.courtLabels
     );
     ui.renderPaymentSummary(options);
 

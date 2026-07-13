@@ -99,6 +99,15 @@
         return playerAvailability;
     }
 
+    function normalizeCourtLabels(value, courts) {
+        const labels = String(value || "")
+            .split(",")
+            .map(label => label.trim())
+            .filter(Boolean);
+
+        return Array.from({ length: courts }, (_, index) => labels[index] || String(index + 1));
+    }
+
     function normalizePaymentTarget(value) {
         const rawValue = String(value || "").trim();
         const cardDigits = rawValue.replace(/[\s-]/g, "");
@@ -181,6 +190,10 @@
             seed: document.getElementById("seed").value,
             games,
             courts: +document.getElementById("courts").value,
+            courtLabels: normalizeCourtLabels(
+                document.getElementById("courtLabels").value,
+                +document.getElementById("courts").value
+            ),
             players,
             playerAvailability: readPlayerAvailability(players, games),
             paymentTarget: document.getElementById("paymentTarget").value,
@@ -195,6 +208,7 @@
             s: options.seed,
             g: String(options.games),
             c: String(options.courts),
+            cl: document.getElementById("courtLabels").value,
             t: document.getElementById("startTime").value,
             p: options.players,
             a: options.playerAvailability,
@@ -207,6 +221,7 @@
         if (state.s) document.getElementById("seed").value = state.s;
         if (state.g) document.getElementById("games").value = state.g;
         if (state.c) document.getElementById("courts").value = state.c;
+        if (state.cl) document.getElementById("courtLabels").value = state.cl;
         if (state.t) document.getElementById("startTime").value = state.t;
         if (state.pay) document.getElementById("paymentTarget").value = state.pay;
         if (state.cost) document.getElementById("rentalCost").value = state.cost;
@@ -238,15 +253,19 @@
         row.append(cell);
     }
 
-    function renderTable(results, courts) {
+    function renderTable(results, courts, courtLabels) {
         const table = document.createElement("table");
         const header = document.createElement("tr");
+        const displayCourtLabels = normalizeCourtLabels(
+            Array.isArray(courtLabels) ? courtLabels.join(",") : courtLabels,
+            courts
+        );
         let currentMinutes = time.parseTimeToMinutes(document.getElementById("startTime").value);
         latestScheduleSlots = [];
 
         appendCell(header, "th", "Час");
         for (let court = 1; court <= courts; court++) {
-            appendCell(header, "th", "Корт " + court);
+            appendCell(header, "th", "Корт " + displayCourtLabels[court - 1]);
         }
         appendCell(header, "th", "Відпочивають");
         table.append(header);
@@ -262,6 +281,7 @@
             result.pairs.forEach((pair, index) => {
                 slot.courts.push({
                     court: index + 1,
+                    courtLabel: displayCourtLabels[index],
                     players: pair
                 });
                 appendCell(row, "td", formatCourtSlot(pair));
@@ -313,6 +333,7 @@
                     playerMatch = {
                         time: slot.time,
                         court: courtInfo.court,
+                        courtLabel: courtInfo.courtLabel,
                         opponent: courtInfo.players.find(p => p !== player),
                         isRest: false
                     };
@@ -366,7 +387,7 @@
                 appendScheduleText(item, "schedule-rest", "Відпочинок");
                 appendScheduleText(item, "schedule-opponent", "");
             } else {
-                appendScheduleText(item, "schedule-court", `Корт ${match.court}`);
+                appendScheduleText(item, "schedule-court", `Корт ${match.courtLabel}`);
                 appendScheduleText(item, "schedule-opponent", `з ${match.opponent}`);
             }
 
@@ -394,16 +415,21 @@
         return { fragment, list };
     }
 
-    function renderStats(playerCount, pairCount, courtPins, courtPinOrder) {
+    function renderStats(playerCount, pairCount, courtPins, courtPinOrder, courtLabels) {
         const playersSection = createSection("Ігри гравців");
         const pinsSection = createSection("Прив'язка до кортів");
         const pairsSection = createSection("Статистика пар");
+        const maxCourt = Math.max(0, ...Object.values(courtPins));
+        const displayCourtLabels = normalizeCourtLabels(
+            Array.isArray(courtLabels) ? courtLabels.join(",") : courtLabels,
+            maxCourt
+        );
 
         Object.keys(playerCount).forEach(player => {
             appendListItem(playersSection.list, player, playerCount[player]);
 
             const court = courtPins[player]
-                ? `Корт ${courtPins[player]} (#${courtPinOrder[player]})`
+                ? `Корт ${displayCourtLabels[courtPins[player] - 1]} (#${courtPinOrder[player]})`
                 : "не призначено";
             appendListItem(pinsSection.list, player, court);
         });
@@ -688,6 +714,7 @@
         setSharedSectionExpanded,
         toggleSharedSection,
         revealPaymentSection,
+        normalizeCourtLabels,
         normalizePaymentTarget,
         countAvailableGames,
         calculatePaymentShares
