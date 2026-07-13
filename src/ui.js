@@ -161,6 +161,26 @@
         return Number.isFinite(cost) && cost > 0 ? cost : 0;
     }
 
+    function getDefaultRentalCost(courts) {
+        const courtCount = Number.parseInt(courts, 10);
+
+        return Number.isFinite(courtCount) && courtCount > 0
+            ? config.DEFAULT_COURT_RENTAL_COST * courtCount
+            : 0;
+    }
+
+    function resolveRentalCost(value, courts) {
+        return String(value || "").trim() === "" ? String(getDefaultRentalCost(courts)) : value;
+    }
+
+    function syncRentalCostPlaceholder() {
+        const courtsInput = document.getElementById("courts");
+        const rentalCostInput = document.getElementById("rentalCost");
+        if (!courtsInput || !rentalCostInput) return;
+
+        rentalCostInput.placeholder = String(getDefaultRentalCost(courtsInput.value));
+    }
+
     function calculatePaymentShares(players, playerAvailability, games, rentalCost) {
         const cost = parseRentalCost(rentalCost);
         const entries = players.map(player => ({
@@ -184,20 +204,19 @@
 
     function readScheduleOptions() {
         const games = +document.getElementById("games").value;
+        const courts = +document.getElementById("courts").value;
+        const rentalCost = document.getElementById("rentalCost").value;
         const players = getSelectedPlayers();
 
         return {
             seed: document.getElementById("seed").value,
             games,
-            courts: +document.getElementById("courts").value,
-            courtLabels: normalizeCourtLabels(
-                document.getElementById("courtLabels").value,
-                +document.getElementById("courts").value
-            ),
+            courts,
+            courtLabels: normalizeCourtLabels(document.getElementById("courtLabels").value, courts),
             players,
             playerAvailability: readPlayerAvailability(players, games),
             paymentTarget: document.getElementById("paymentTarget").value,
-            rentalCost: document.getElementById("rentalCost").value
+            rentalCost: resolveRentalCost(rentalCost, courts)
         };
     }
 
@@ -711,11 +730,14 @@
         exportCSV,
         applyReadonlyMode,
         startGameTimeHighlighter,
+        syncRentalCostPlaceholder,
         setSharedSectionExpanded,
         toggleSharedSection,
         revealPaymentSection,
         normalizeCourtLabels,
         normalizePaymentTarget,
+        getDefaultRentalCost,
+        resolveRentalCost,
         countAvailableGames,
         calculatePaymentShares
     };
