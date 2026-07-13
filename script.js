@@ -50,6 +50,7 @@ function loadFromHash() {
 
 function bindEvents() {
     document.getElementById("games").addEventListener("input", ui.syncAvailabilityPlaceholders);
+    document.getElementById("courts").addEventListener("input", ui.syncRentalCostPlaceholder);
     document.getElementById("refreshSeed").addEventListener("click", ui.autoSeed);
     document.getElementById("generateBtn").addEventListener("click", generate);
     document.getElementById("exportCsvBtn").addEventListener("click", ui.exportCSV);
@@ -64,8 +65,10 @@ function bindEvents() {
 ui.initPlayers();
 bindEvents();
 ui.autoSeed();
+ui.syncRentalCostPlaceholder();
 
 if (loadFromHash()) {
+    ui.syncRentalCostPlaceholder();
     generate();
     ui.applyReadonlyMode(true);
 }

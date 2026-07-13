@@ -804,6 +804,24 @@ test("counts payment availability inside schedule bounds", () => {
     assert.equal(ui.countAvailableGames({ from: "7", to: "3" }, 8), 0);
 });
 
+test("defaults rental cost from court count when no cost is provided", () => {
+    assert.equal(ui.getDefaultRentalCost(2), 1200);
+    assert.equal(ui.getDefaultRentalCost("3"), 1800);
+    assert.equal(ui.resolveRentalCost("", 4), "2400");
+    assert.equal(ui.resolveRentalCost("1000", 4), "1000");
+});
+
+test("shows default rental cost as the input placeholder", () => {
+    withFakeDocument(document => {
+        appendRoot(document, "courts", "3");
+        const rentalCost = appendRoot(document, "rentalCost");
+
+        ui.syncRentalCostPlaceholder();
+
+        assert.equal(rentalCost.placeholder, "1800");
+    });
+});
+
 test("calculates payment shares from availability and rounds up", () => {
     const players = PLAYER_LIST.slice(0, 3);
     const shares = ui.calculatePaymentShares(
