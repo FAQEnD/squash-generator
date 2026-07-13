@@ -709,11 +709,20 @@ test("formats and parses time ranges", () => {
     assert.equal(isMinuteInRange(18 * 60 + 50, range), false);
 });
 
+test("normalizes custom court labels", () => {
+    assert.deepEqual(ui.normalizeCourtLabels("2, 3, 4", 3), ["2", "3", "4"]);
+    assert.deepEqual(ui.normalizeCourtLabels("", 3), ["1", "2", "3"]);
+    assert.deepEqual(ui.normalizeCourtLabels("2, 3, 4, 5", 3), ["2", "3", "4"]);
+    assert.deepEqual(ui.normalizeCourtLabels("2", 3), ["2", "2", "3"]);
+    assert.deepEqual(ui.normalizeCourtLabels(" 2, , 4 ", 3), ["2", "4", "3"]);
+});
+
 test("encodes and decodes share state", () => {
     const state = {
         s: "123",
         g: "8",
         c: "2",
+        cl: "2, 3",
         t: "18:40",
         p: PLAYER_LIST.slice(0, 2),
         a: {
@@ -729,6 +738,42 @@ test("encodes and decodes share state", () => {
     const hash = new URL(url).hash;
 
     assert.deepEqual(decodeState(hash), state);
+});
+
+test("renders table with custom court labels", () => {
+    withFakeDocument(document => {
+        appendRoot(document, "startTime", "18:40");
+        const tableBox = appendRoot(document, "tableBox");
+
+        ui.renderTable(
+            [
+                {
+                    game: 1,
+                    pairs: [["Anton"], ["Nazar"], ["Ira"]],
+                    rest: []
+                }
+            ],
+            3,
+            ["2", "3", "4"]
+        );
+
+        const headers = descendants(tableBox)
+            .filter(el => el.tagName === "TH")
+            .map(el => el.innerText);
+
+        assert.deepEqual(headers, ["Час", "Корт 2", "Корт 3", "Корт 4", "Відпочивають"]);
+    });
+});
+
+test("renders court pin stats with custom court labels", () => {
+    withFakeDocument(document => {
+        appendRoot(document, "statsPlayers");
+        const statsPairs = appendRoot(document, "statsPairs");
+
+        ui.renderStats({ Anton: 1 }, {}, { Anton: 2 }, { Anton: 1 }, ["2", "4"]);
+
+        assert.equal(statsPairs.innerText.includes("Корт 4 (#1)"), true);
+    });
 });
 
 test("recognizes and normalizes card payment targets", () => {
@@ -1109,6 +1154,35 @@ test("moves payment highlight when another player is selected", () => {
 
         assert.equal(rows[0].classList.contains("payment-player-active"), true);
         assert.equal(rows[1].classList.contains("payment-player-active"), false);
+    });
+});
+
+test("renders player schedule with custom court labels", () => {
+    withFakeDocument(document => {
+        appendRoot(document, "startTime", "18:40");
+        appendRoot(document, "tableBox");
+        appendRoot(document, "playerScheduleResult");
+
+        ui.renderTable(
+            [
+                {
+                    game: 1,
+                    pairs: [
+                        ["Anton", "Olek"],
+                        ["Yulia", "Ira"]
+                    ],
+                    rest: []
+                }
+            ],
+            2,
+            ["2", "4"]
+        );
+        ui.renderPlayerSchedule("Ira");
+
+        const personalRows = document.querySelectorAll(".player-schedule-list li");
+
+        assert.equal(personalRows.length, 1);
+        assert.equal(personalRows[0].innerText.includes("Корт 4"), true);
     });
 });
 
