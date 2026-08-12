@@ -805,9 +805,9 @@ test("counts payment availability inside schedule bounds", () => {
 });
 
 test("defaults rental cost from court count when no cost is provided", () => {
-    assert.equal(ui.getDefaultRentalCost(2), 1200);
-    assert.equal(ui.getDefaultRentalCost("3"), 1800);
-    assert.equal(ui.resolveRentalCost("", 4), "2400");
+    assert.equal(ui.getDefaultRentalCost(2), 1440);
+    assert.equal(ui.getDefaultRentalCost("3"), 2160);
+    assert.equal(ui.resolveRentalCost("", 4), "2880");
     assert.equal(ui.resolveRentalCost("1000", 4), "1000");
 });
 
@@ -818,7 +818,7 @@ test("shows default rental cost as the input placeholder", () => {
 
         ui.syncRentalCostPlaceholder();
 
-        assert.equal(rentalCost.placeholder, "1800");
+        assert.equal(rentalCost.placeholder, "2160");
     });
 });
 
